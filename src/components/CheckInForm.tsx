@@ -1,0 +1,135 @@
+'use client';
+
+import { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+
+export default function CheckInForm() {
+    const [anonymousId, setAnonymousId] = useState<string>('');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleCheckIn = async () => {
+        setLoading(true);
+        setMessage(null);
+
+        try {
+            const id = anonymousId || uuidv4();
+            
+            const response = await fetch('/api/checkin', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    anonymousId: id,
+                    deviceInfo: navigator.userAgent,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setMessage({ type: 'success', text: `Checked in successfully! Your ID: ${data.anonymousId}` });
+                localStorage.setItem('checkInId', data.id);
+                localStorage.setItem('anonymousId', data.anonymousId);
+                setAnonymousId('');
+            } else {
+                setMessage({ type: 'error', text: data.error || 'Failed to check in' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Network error. Please try again.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCheckOut = async () => {
+        const checkInId = localStorage.getItem('checkInId');
+        
+        if (!checkInId) {
+            setMessage({ type: 'error', text: 'No active check-in found' });
+            return;
+        }
+
+        setLoading(true);
+        setMessage(null);
+
+        try {
+            const response = await fetch(`/api/checkin/${checkInId}/checkout`, {
+                method: 'POST',
+            });
+
+            if (response.ok) {
+                setMessage({ type: 'success', text: 'Checked out successfully!' });
+                localStorage.removeItem('checkInId');
+                localStorage.removeItem('anonymousId');
+            } else {
+                const data = await response.json();
+                setMessage({ type: 'error', text: data.error || 'Failed to check out' });
+            }
+        } catch (error) {
+            setMessage({ type: 'error', text: 'Network error. Please try again.' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+            <h2 className="text-2xl font-bold mb-6 text-gray-800">Check-In System</h2>
+            
+            <div className="space-y-4">
+                <div>
+                    <label htmlFor="anonymousId" className="block text-sm font-medium text-gray-700 mb-2">
+                        Anonymous ID (optional - auto-generated if empty)
+                    </label>
+                    <input
+                        id="anonymousId"
+                        type="text"
+                        value={anonymousId}
+                        onChange={(e) => setAnonymousId(e.target.value)}
+                        placeholder="Leave empty for auto-generation"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={loading}
+                    />
+                </div>
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleCheckIn}
+                        disabled={loading}
+                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                        {loading ? 'Processing...' : 'Check In'}
+                    </button>
+
+                    <button
+                        onClick={handleCheckOut}
+                        disabled={loading}
+                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                    >
+                        {loading ? 'Processing...' : 'Check Out'}
+                    </button>
+                </div>
+
+                {message && (
+                    <div
+                        className={`p-4 rounded-md ${
+                            message.type === 'success'
+                                ? 'bg-green-50 text-green-800 border border-green-200'
+                                : 'bg-red-50 text-red-800 border border-red-200'
+                        }`}
+                    >
+                        <p className="text-sm">{message.text}</p>
+                    </div>
+                )}
+
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">
+                        Your anonymous ID is stored locally on your device and not shared.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+}
