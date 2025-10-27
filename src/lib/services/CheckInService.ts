@@ -112,6 +112,28 @@ export class CheckInService {
     }
 
     /**
+     * Get all check-ins (active and inactive)
+     */
+    async getAllCheckIns() {
+        try {
+            const checkIns = await prisma.checkIn.findMany({
+                orderBy: { checkInTime: 'desc' },
+            });
+
+            return {
+                success: true,
+                data: checkIns,
+            };
+        } catch (error) {
+            console.error('Error fetching check-ins:', error);
+            return {
+                success: false,
+                error: 'Failed to fetch check-ins',
+            };
+        }
+    }
+
+    /**
      * Get check-in by anonymous ID
      */
     async getByAnonymousId(anonymousId: string) {
