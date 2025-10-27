@@ -14,9 +14,10 @@ const service = new CheckInService();
  */
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const { id } = await params;
         const body = await request.json();
         const validatedData = updateSchema.parse(body);
 
@@ -27,7 +28,7 @@ export async function PATCH(
                 : undefined,
         };
 
-        const result = await service.update(params.id, updateData);
+        const result = await service.update(id, updateData);
 
         if (!result.success) {
             return NextResponse.json(
@@ -40,7 +41,7 @@ export async function PATCH(
     } catch (error) {
         if (error instanceof z.ZodError) {
             return NextResponse.json(
-                { error: 'Invalid input', details: error.errors },
+                { error: 'Invalid input', details: error.issues },
                 { status: 400 }
             );
         }
@@ -57,10 +58,11 @@ export async function PATCH(
  */
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const result = await service.delete(params.id);
+        const { id } = await params;
+        const result = await service.delete(id);
 
         if (!result.success) {
             return NextResponse.json(
@@ -70,7 +72,7 @@ export async function DELETE(
         }
 
         return NextResponse.json({ message: result.message });
-    } catch (error) {
+    } catch {
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }
@@ -83,10 +85,11 @@ export async function DELETE(
  */
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const result = await service.checkOut(params.id);
+        const { id } = await params;
+        const result = await service.checkOut(id);
 
         if (!result.success) {
             return NextResponse.json(
@@ -96,7 +99,7 @@ export async function POST(
         }
 
         return NextResponse.json(result.data);
-    } catch (error) {
+    } catch {
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }
