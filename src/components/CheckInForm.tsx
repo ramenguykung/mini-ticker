@@ -89,7 +89,7 @@ export default function CheckInForm() {
                         value={anonymousId}
                         onChange={(e) => setAnonymousId(e.target.value)}
                         placeholder="Leave empty for auto-generation"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 text-gray-800"
                         disabled={loading}
                     />
                 </div>
