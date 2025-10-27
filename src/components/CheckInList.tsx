@@ -14,6 +14,10 @@ export default function CheckInList() {
     const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [targetDeleteId, setTargetDeleteId] = useState<string | null>(null);
+    const [checkInIdInput, setCheckInIdInput] = useState('');
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const fetchCheckIns = async () => {
         try {
@@ -43,23 +47,44 @@ export default function CheckInList() {
     }, []);
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this check-in?')) {
+        setTargetDeleteId(id);
+        setCheckInIdInput('');
+        setDeleteError(null);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!targetDeleteId) return;
+
+        if (checkInIdInput.trim() !== targetDeleteId) {
+            setDeleteError('Incorrect Check-In ID. Deletion denied.');
             return;
         }
 
         try {
-            const response = await fetch(`/api/checkin/${id}`, {
+            const response = await fetch(`/api/checkin/${targetDeleteId}`, {
                 method: 'DELETE',
             });
 
             if (response.ok) {
-                setCheckIns(checkIns.filter(c => c.id !== id));
+                setCheckIns(checkIns.filter(c => c.id !== targetDeleteId));
+                setDeleteModalOpen(false);
+                setTargetDeleteId(null);
+                setCheckInIdInput('');
+                setDeleteError(null);
             } else {
-                alert('Failed to delete check-in');
+                setDeleteError('Failed to delete check-in. Please try again.');
             }
-        } catch (error) {
-            alert('Network error');
+        } catch {
+            setDeleteError('Network error. Please try again.');
         }
+    };
+
+    const cancelDelete = () => {
+        setDeleteModalOpen(false);
+        setTargetDeleteId(null);
+        setCheckInIdInput('');
+        setDeleteError(null);
     };
 
     if (loading) {
@@ -140,6 +165,60 @@ export default function CheckInList() {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deleteModalOpen && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+                        <h3 className="text-lg font-bold text-gray-900 mb-4">
+                            Confirm Deletion
+                        </h3>
+                        
+                        <p className="text-sm text-gray-600 mb-4">
+                            To delete this check-in session, please enter the <strong>Check-In ID</strong> that was provided when you checked in.
+                        </p>
+
+                        <div className="mb-4">
+                            <label htmlFor="checkInIdInput" className="block text-sm font-medium text-gray-700 mb-2">
+                                Check-In ID
+                            </label>
+                            <input
+                                id="checkInIdInput"
+                                type="text"
+                                value={checkInIdInput}
+                                onChange={(e) => {
+                                    setCheckInIdInput(e.target.value);
+                                    setDeleteError(null);
+                                }}
+                                placeholder="Enter Check-In ID"
+                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-800 font-mono text-sm"
+                                autoFocus
+                            />
+                        </div>
+
+                        {deleteError && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                <p className="text-sm text-red-800">{deleteError}</p>
+                            </div>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={cancelDelete}
+                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
+                            >
+                                Delete
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
