@@ -75,7 +75,7 @@ export default function CheckInForm() {
     };
 
     return (
-        <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+        <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-2xl">
             <h2 className="text-2xl font-bold mb-6 text-gray-800">Check-In System</h2>
             
             <div className="space-y-4">
@@ -98,7 +98,7 @@ export default function CheckInForm() {
                     <button
                         onClick={handleCheckIn}
                         disabled={loading}
-                        className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                        className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                         {loading ? 'Processing...' : 'Check In'}
                     </button>
@@ -106,7 +106,7 @@ export default function CheckInForm() {
                     <button
                         onClick={handleCheckOut}
                         disabled={loading}
-                        className="flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                        className="flex-1 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                         {loading ? 'Processing...' : 'Check Out'}
                     </button>
