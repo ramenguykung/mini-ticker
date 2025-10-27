@@ -43,11 +43,11 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/checkin - Get all active check-ins
+ * GET /api/checkin - Get all check-ins (active and inactive)
  */
 export async function GET() {
     try {
-        const result = await service.getActiveCheckIns();
+        const result = await service.getAllCheckIns();
 
         if (!result.success) {
             return NextResponse.json(
