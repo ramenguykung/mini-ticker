@@ -169,7 +169,7 @@ export default function CheckInForm() {
                                     <p>• Anonymous ID: <span className="font-bold">{message.anonymousId}</span></p>
                                     <p>• Check-In ID: <span className="font-bold">{message.checkInId}</span></p>
                                 </div>
-                            <p className="text-md">Use your <strong>Anonymous ID</strong> to check out<br/><strong><u>You&apos;ll need the Check-In ID</u></strong> to delete your session from the list.</p>
+                            <p className="text-md"><strong><u>You&apos;ll need the Check-In ID</u></strong> to delete your session from the list.</p>
                             </div>
                         ) : (
                             <p className="text-sm">{message.text}</p>
