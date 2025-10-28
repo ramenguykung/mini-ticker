@@ -94,6 +94,10 @@ export class CheckInService {
     async getActiveCheckIns() {
         try {
             const checkIns = await prisma.checkIn.findMany({
+                cacheStrategy: {
+                    ttl: 5,
+                    swr: 15
+                },
                 where: { status: 'active' },
                 orderBy: { checkInTime: 'desc' },
             });
@@ -117,6 +121,10 @@ export class CheckInService {
     async getAllCheckIns() {
         try {
             const checkIns = await prisma.checkIn.findMany({
+                cacheStrategy: {
+                    ttl: 2,
+                    swr: 8
+                },
                 orderBy: { checkInTime: 'desc' },
             });
 
@@ -139,6 +147,10 @@ export class CheckInService {
     async getByAnonymousId(anonymousId: string) {
         try {
             const checkIn = await prisma.checkIn.findFirst({
+                cacheStrategy: {
+                    ttl: 5,
+                    swr: 15
+                },
                 where: { anonymousId },
                 orderBy: { checkInTime: 'desc' },
             });
