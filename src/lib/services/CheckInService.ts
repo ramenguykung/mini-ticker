@@ -19,6 +19,42 @@ export class CheckInService {
         try {
             const anonymousId = data.anonymousId || uuidv4();
             
+            // Check if anonymousId already has an active check-in
+            const existingActiveCheckIn = await prisma.checkIn.findFirst({
+                where: {
+                    anonymousId,
+                    status: 'active',
+                },
+            });
+
+            if (existingActiveCheckIn) {
+                return {
+                    success: false,
+                    error: 'You already have an active check-in. Please check out first.',
+                };
+            }
+
+            // Rate limiting: Check if anonymousId has checked in within the last 30 seconds
+            const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
+            const recentCheckIn = await prisma.checkIn.findFirst({
+                where: {
+                    anonymousId,
+                    checkInTime: {
+                        gte: thirtySecondsAgo,
+                    },
+                },
+                orderBy: {
+                    checkInTime: 'desc',
+                },
+            });
+
+            if (recentCheckIn) {
+                return {
+                    success: false,
+                    error: 'Please wait at least 30 seconds between check-ins.',
+                };
+            }
+            
             const checkIn = await prisma.checkIn.create({
                 data: {
                     anonymousId,
@@ -221,10 +257,39 @@ export class CheckInService {
     /**
      * Check out a user (update status and set checkout time)
      */
-    async checkOut(id: string) {
-        return this.update(id, {
-            status: 'checked-out',
-            checkOutTime: new Date(),
-        });
+    async checkOut(id: string, anonymousId?: string) {
+        try {
+            // If anonymousId is provided, verify it matches the check-in record
+            if (anonymousId) {
+                const checkIn = await prisma.checkIn.findUnique({
+                    where: { id },
+                });
+
+                if (!checkIn) {
+                    return {
+                        success: false,
+                        error: 'Check-in not found',
+                    };
+                }
+
+                if (checkIn.anonymousId !== anonymousId) {
+                    return {
+                        success: false,
+                        error: 'Unauthorized: Anonymous ID does not match',
+                    };
+                }
+            }
+
+            return this.update(id, {
+                status: 'checked-out',
+                checkOutTime: new Date(),
+            });
+        } catch (error) {
+            console.error('Error checking out:', error);
+            return {
+                success: false,
+                error: 'Failed to check out',
+            };
+        }
     }
 }

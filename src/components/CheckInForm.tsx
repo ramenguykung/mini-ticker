@@ -50,6 +50,7 @@ export default function CheckInForm() {
 
     const handleCheckOut = async () => {
         const checkInId = localStorage.getItem('checkInId');
+        const storedAnonymousId = localStorage.getItem('anonymousId');
         
         if (!checkInId) {
             setMessage({ type: 'error', text: 'No active check-in found' });
@@ -62,6 +63,12 @@ export default function CheckInForm() {
         try {
             const response = await fetch(`/api/checkin/${checkInId}/checkout`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    anonymousId: storedAnonymousId,
+                }),
             });
 
             if (response.ok) {
@@ -94,9 +101,11 @@ export default function CheckInForm() {
                         value={anonymousId}
                         onChange={(e) => setAnonymousId(e.target.value)}
                         placeholder="Leave empty for auto-generation"
+                        maxLength={100}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 text-gray-800"
                         disabled={loading}
                     />
+                    <p className="text-xs text-gray-500 mt-1">Max 100 characters</p>
                 </div>
 
                 <div className="flex gap-3">
