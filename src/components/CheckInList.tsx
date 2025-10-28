@@ -22,9 +22,13 @@ export default function CheckInList() {
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-    const fetchCheckIns = async () => {
+    const fetchCheckIns = async (bypassCache = false) => {
         try {
-            const response = await fetch('/api/checkin');
+            const url = bypassCache 
+                ? `/api/checkin?nocache=${Date.now()}` 
+                : '/api/checkin';
+            
+            const response = await fetch(url);
             
             if (!response.ok) {
                 throw new Error('Failed to fetch check-ins');
@@ -82,6 +86,9 @@ export default function CheckInList() {
                 setTargetDeleteId(null);
                 setCheckInIdInput('');
                 setDeleteError(null);
+                
+                // Force immediate refresh with cache bypass
+                await fetchCheckIns(true);
             } else {
                 setDeleteError('Failed to delete check-in. Please try again.');
             }
@@ -111,8 +118,8 @@ export default function CheckInList() {
             });
 
             if (response.ok) {
-                // Refresh the list to show updated status
-                await fetchCheckIns();
+                // Force immediate refresh with cache bypass
+                await fetchCheckIns(true);
                 setCheckoutModalOpen(false);
                 setTargetCheckoutId(null);
                 setCheckInIdInput('');

@@ -118,13 +118,14 @@ export class CheckInService {
     /**
      * Get all check-ins (active and inactive)
      */
-    async getAllCheckIns() {
+    async getAllCheckIns(bypassCache = false) {
         try {
+            const cacheConfig = bypassCache 
+                ? { ttl: 0, swr: 0 } 
+                : { ttl: 2, swr: 8 };
+            
             const checkIns = await prisma.checkIn.findMany({
-                cacheStrategy: {
-                    ttl: 2,
-                    swr: 8
-                },
+                cacheStrategy: cacheConfig,
                 orderBy: { checkInTime: 'desc' },
             });
 
