@@ -19,41 +19,8 @@ export class CheckInService {
         try {
             const anonymousId = data.anonymousId || uuidv4();
             
-            // Check if anonymousId already has an active check-in
-            const existingActiveCheckIn = await prisma.checkIn.findFirst({
-                where: {
-                    anonymousId,
-                    status: 'active',
-                },
-            });
-
-            if (existingActiveCheckIn) {
-                return {
-                    success: false,
-                    error: 'You already have an active check-in. Please check out first.',
-                };
-            }
-
-            // Rate limiting: Check if anonymousId has checked in within the last 30 seconds
-            const thirtySecondsAgo = new Date(Date.now() - 30 * 1000);
-            const recentCheckIn = await prisma.checkIn.findFirst({
-                where: {
-                    anonymousId,
-                    checkInTime: {
-                        gte: thirtySecondsAgo,
-                    },
-                },
-                orderBy: {
-                    checkInTime: 'desc',
-                },
-            });
-
-            if (recentCheckIn) {
-                return {
-                    success: false,
-                    error: 'Please wait at least 30 seconds between check-ins.',
-                };
-            }
+            // No duplicate anonymousId check - multiple users can share the same anonymousId
+            // Each check-in is uniquely identified by its checkInId (UUID primary key)
             
             const checkIn = await prisma.checkIn.create({
                 data: {
