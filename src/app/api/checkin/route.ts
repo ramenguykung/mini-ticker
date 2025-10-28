@@ -43,11 +43,15 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/checkin - Get all active check-ins
+ * GET /api/checkin - Get all check-ins (active and inactive)
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        const result = await service.getActiveCheckIns();
+        // Check if cache bypass is requested via query parameter
+        const { searchParams } = new URL(request.url);
+        const bypassCache = searchParams.has('nocache');
+        
+        const result = await service.getAllCheckIns(bypassCache);
 
         if (!result.success) {
             return NextResponse.json(
@@ -57,7 +61,7 @@ export async function GET() {
         }
 
         return NextResponse.json(result.data);
-    } catch (error) {
+    } catch {
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }

@@ -94,6 +94,10 @@ export class CheckInService {
     async getActiveCheckIns() {
         try {
             const checkIns = await prisma.checkIn.findMany({
+                cacheStrategy: {
+                    ttl: 5,
+                    swr: 15
+                },
                 where: { status: 'active' },
                 orderBy: { checkInTime: 'desc' },
             });
@@ -112,12 +116,44 @@ export class CheckInService {
     }
 
     /**
-     * Get check-in by anonymous ID
+     * Get all check-ins (active and inactive)
+     */
+    async getAllCheckIns(bypassCache = false) {
+        try {
+            const cacheConfig = bypassCache 
+                ? { ttl: 0, swr: 0 } 
+                : { ttl: 2, swr: 8 };
+            
+            const checkIns = await prisma.checkIn.findMany({
+                cacheStrategy: cacheConfig,
+                orderBy: { checkInTime: 'desc' },
+            });
+
+            return {
+                success: true,
+                data: checkIns,
+            };
+        } catch (error) {
+            console.error('Error fetching check-ins:', error);
+            return {
+                success: false,
+                error: 'Failed to fetch check-ins',
+            };
+        }
+    }
+
+    /**
+     * Get check-in by anonymous ID (returns the most recent active check-in)
      */
     async getByAnonymousId(anonymousId: string) {
         try {
-            const checkIn = await prisma.checkIn.findUnique({
+            const checkIn = await prisma.checkIn.findFirst({
+                cacheStrategy: {
+                    ttl: 5,
+                    swr: 15
+                },
                 where: { anonymousId },
+                orderBy: { checkInTime: 'desc' },
             });
 
             return {
@@ -129,6 +165,55 @@ export class CheckInService {
             return {
                 success: false,
                 error: 'Failed to fetch check-in',
+            };
+        }
+    }
+
+    /**
+     * Get active check-in by anonymous ID
+     */
+    async getActiveCheckInByAnonymousId(anonymousId: string) {
+        try {
+            const checkIn = await prisma.checkIn.findFirst({
+                where: { 
+                    anonymousId,
+                    status: 'active'
+                },
+                orderBy: { checkInTime: 'desc' },
+            });
+
+            return {
+                success: true,
+                data: checkIn,
+            };
+        } catch (error) {
+            console.error('Error fetching active check-in:', error);
+            return {
+                success: false,
+                error: 'Failed to fetch active check-in',
+            };
+        }
+    }
+
+    /**
+     * Get all check-ins for a specific anonymous ID
+     */
+    async getAllCheckInsByAnonymousId(anonymousId: string) {
+        try {
+            const checkIns = await prisma.checkIn.findMany({
+                where: { anonymousId },
+                orderBy: { checkInTime: 'desc' },
+            });
+
+            return {
+                success: true,
+                data: checkIns,
+            };
+        } catch (error) {
+            console.error('Error fetching check-ins:', error);
+            return {
+                success: false,
+                error: 'Failed to fetch check-ins',
             };
         }
     }

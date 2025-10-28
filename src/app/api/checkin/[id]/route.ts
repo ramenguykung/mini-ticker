@@ -79,30 +79,3 @@ export async function DELETE(
         );
     }
 }
-
-/**
- * POST /api/checkin/[id]/checkout - Check out a user
- */
-export async function POST(
-    request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
-) {
-    try {
-        const { id } = await params;
-        const result = await service.checkOut(id);
-
-        if (!result.success) {
-            return NextResponse.json(
-                { error: result.error },
-                { status: 400 }
-            );
-        }
-
-        return NextResponse.json(result.data);
-    } catch {
-        return NextResponse.json(
-            { error: 'Internal server error' },
-            { status: 500 }
-        );
-    }
-}

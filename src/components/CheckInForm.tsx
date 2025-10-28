@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 export default function CheckInForm() {
     const [anonymousId, setAnonymousId] = useState<string>('');
     const [loading, setLoading] = useState(false);
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string; anonymousId?: string; checkInId?: string } | null>(null);
 
     const handleCheckIn = async () => {
         setLoading(true);
@@ -29,14 +29,19 @@ export default function CheckInForm() {
             const data = await response.json();
 
             if (response.ok) {
-                setMessage({ type: 'success', text: `Checked in successfully! Your ID: ${data.anonymousId}` });
+                setMessage({ 
+                    type: 'success', 
+                    text: '',
+                    anonymousId: data.anonymousId,
+                    checkInId: data.id
+                });
                 localStorage.setItem('checkInId', data.id);
                 localStorage.setItem('anonymousId', data.anonymousId);
                 setAnonymousId('');
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to check in' });
             }
-        } catch (error) {
+        } catch {
             setMessage({ type: 'error', text: 'Network error. Please try again.' });
         } finally {
             setLoading(false);
@@ -67,7 +72,7 @@ export default function CheckInForm() {
                 const data = await response.json();
                 setMessage({ type: 'error', text: data.error || 'Failed to check out' });
             }
-        } catch (error) {
+        } catch {
             setMessage({ type: 'error', text: 'Network error. Please try again.' });
         } finally {
             setLoading(false);
@@ -89,7 +94,7 @@ export default function CheckInForm() {
                         value={anonymousId}
                         onChange={(e) => setAnonymousId(e.target.value)}
                         placeholder="Leave empty for auto-generation"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 text-gray-800"
                         disabled={loading}
                     />
                 </div>
@@ -120,7 +125,19 @@ export default function CheckInForm() {
                                 : 'bg-red-50 text-red-800 border border-red-200'
                         }`}
                     >
-                        <p className="text-sm">{message.text}</p>
+                        {message.type === 'success' && message.anonymousId && message.checkInId ? (
+                            <div className="text-sm space-y-3">
+                                <p className="font-semibold">Checked in successfully!</p>
+                                <div className="font-mono">
+                                    <p className="font-bold mb-2">SAVE THESE IDs:</p>
+                                    <p>• Anonymous ID: <span className="font-bold">{message.anonymousId}</span></p>
+                                    <p>• Check-In ID: <span className="font-bold">{message.checkInId}</span></p>
+                                </div>
+                            <p className="text-md">Use your <strong>Anonymous ID</strong> to check out<br/><strong><u>You&apos;ll need the Check-In ID</u></strong> to delete your session from the list.</p>
+                            </div>
+                        ) : (
+                            <p className="text-sm">{message.text}</p>
+                        )}
                     </div>
                 )}
 
