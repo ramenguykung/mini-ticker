@@ -42,7 +42,7 @@ export default function CheckInList() {
     };
 
     useEffect(() => {
-        fetchCheckIns();
+        void fetchCheckIns();
         
         // Refresh every 5 seconds
         const interval = setInterval(fetchCheckIns, 5000);
