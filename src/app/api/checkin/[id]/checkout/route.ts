@@ -30,7 +30,7 @@ export async function POST(
             );
         }
 
-        return NextResponse.json(result.data);
+        return NextResponse.json(result.success ? result.data : {});
     } catch (error) {
         if (error instanceof z.ZodError) {
             return NextResponse.json(

@@ -1,14 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 export default function CheckInForm() {
     const [anonymousId, setAnonymousId] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [isCheckedIn, setIsCheckedIn] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string; anonymousId?: string; checkInId?: string } | null>(null);
 
+    // Check localStorage on mount to see if user is already checked in
+    useEffect(() => {
+        const checkInId = localStorage.getItem('checkInId');
+        const storedAnonymousId = localStorage.getItem('anonymousId');
+        
+        if (checkInId && storedAnonymousId) {
+            setIsCheckedIn(true);
+            setAnonymousId(storedAnonymousId);
+        }
+    }, []);
+
     const handleCheckIn = async () => {
+        // Check localStorage first - prevent check-in if already checked in
+        const existingCheckInId = localStorage.getItem('checkInId');
+        if (existingCheckInId) {
+            setMessage({ 
+                type: 'error', 
+                text: 'You already have an active check-in on this browser. Please check out first.' 
+            });
+            return;
+        }
+
         setLoading(true);
         setMessage(null);
 
@@ -37,7 +59,8 @@ export default function CheckInForm() {
                 });
                 localStorage.setItem('checkInId', data.id);
                 localStorage.setItem('anonymousId', data.anonymousId);
-                setAnonymousId('');
+                setAnonymousId(data.anonymousId); // Populate the input field with the anonymousId
+                setIsCheckedIn(true); // Lock the form
             } else {
                 setMessage({ type: 'error', text: data.error || 'Failed to check in' });
             }
@@ -50,10 +73,15 @@ export default function CheckInForm() {
 
     const handleCheckOut = async () => {
         const checkInId = localStorage.getItem('checkInId');
-        const storedAnonymousId = localStorage.getItem('anonymousId');
         
         if (!checkInId) {
             setMessage({ type: 'error', text: 'No active check-in found' });
+            return;
+        }
+
+        // Use the anonymousId from the input field (which is now populated and locked)
+        if (!anonymousId) {
+            setMessage({ type: 'error', text: 'Anonymous ID is required for checkout' });
             return;
         }
 
@@ -67,7 +95,7 @@ export default function CheckInForm() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    anonymousId: storedAnonymousId,
+                    anonymousId: anonymousId,
                 }),
             });
 
@@ -75,6 +103,8 @@ export default function CheckInForm() {
                 setMessage({ type: 'success', text: 'Checked out successfully!' });
                 localStorage.removeItem('checkInId');
                 localStorage.removeItem('anonymousId');
+                setAnonymousId(''); // Clear the input field
+                setIsCheckedIn(false); // Unlock the form
             } else {
                 const data = await response.json();
                 setMessage({ type: 'error', text: data.error || 'Failed to check out' });
@@ -93,33 +123,40 @@ export default function CheckInForm() {
             <div className="space-y-4">
                 <div>
                     <label htmlFor="anonymousId" className="block text-sm font-medium text-gray-700 mb-2">
-                        Anonymous ID (optional - auto-generated if empty)
+                        Anonymous ID {isCheckedIn ? '(Currently Checked In)' : '(optional - auto-generated if empty)'}
                     </label>
                     <input
                         id="anonymousId"
                         type="text"
                         value={anonymousId}
                         onChange={(e) => setAnonymousId(e.target.value)}
-                        placeholder="Leave empty for auto-generation"
+                        placeholder={isCheckedIn ? "Your current Anonymous ID" : "Leave empty for auto-generation"}
                         maxLength={100}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 text-gray-800"
-                        disabled={loading}
+                        className={`w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 text-gray-800 ${
+                            isCheckedIn ? 'bg-gray-100 cursor-not-allowed' : ''
+                        }`}
+                        disabled={loading || isCheckedIn}
+                        readOnly={isCheckedIn}
                     />
-                    <p className="text-xs text-gray-500 mt-1">Max 100 characters</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                        {isCheckedIn 
+                            ? 'This is your active Anonymous ID. Check out to unlock.' 
+                            : 'Max 100 characters'}
+                    </p>
                 </div>
 
                 <div className="flex gap-3">
                     <button
                         onClick={handleCheckIn}
-                        disabled={loading}
+                        disabled={loading || isCheckedIn}
                         className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
-                        {loading ? 'Processing...' : 'Check In'}
+                        {loading ? 'Processing...' : isCheckedIn ? 'Already Checked In' : 'Check In'}
                     </button>
 
                     <button
                         onClick={handleCheckOut}
-                        disabled={loading}
+                        disabled={loading || !isCheckedIn}
                         className="flex-1 bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
                     >
                         {loading ? 'Processing...' : 'Check Out'}
