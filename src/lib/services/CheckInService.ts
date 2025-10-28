@@ -19,6 +19,9 @@ export class CheckInService {
         try {
             const anonymousId = data.anonymousId || uuidv4();
             
+            // No duplicate anonymousId check - multiple users can share the same anonymousId
+            // Each check-in is uniquely identified by its checkInId (UUID primary key)
+            
             const checkIn = await prisma.checkIn.create({
                 data: {
                     anonymousId,
@@ -221,10 +224,39 @@ export class CheckInService {
     /**
      * Check out a user (update status and set checkout time)
      */
-    async checkOut(id: string) {
-        return this.update(id, {
-            status: 'checked-out',
-            checkOutTime: new Date(),
-        });
+    async checkOut(id: string, anonymousId?: string) {
+        try {
+            // If anonymousId is provided, verify it matches the check-in record
+            if (anonymousId) {
+                const checkIn = await prisma.checkIn.findUnique({
+                    where: { id },
+                });
+
+                if (!checkIn) {
+                    return {
+                        success: false,
+                        error: 'Check-in not found',
+                    };
+                }
+
+                if (checkIn.anonymousId !== anonymousId) {
+                    return {
+                        success: false,
+                        error: 'Unauthorized: Anonymous ID does not match',
+                    };
+                }
+            }
+
+            return this.update(id, {
+                status: 'checked-out',
+                checkOutTime: new Date(),
+            });
+        } catch (error) {
+            console.error('Error checking out:', error);
+            return {
+                success: false,
+                error: 'Failed to check out',
+            };
+        }
     }
 }

@@ -16,7 +16,7 @@ datasource db {
 
 model CheckIn {
   id            String   @id @default(uuid())
-  anonymousId   String
+  anonymousId   String   @db.VarChar(100)
   status        String   @default("active")
   checkInTime   DateTime @default(now())
   checkOutTime  DateTime?
@@ -27,4 +27,5 @@ model CheckIn {
   @@index([anonymousId])
   @@index([status])
   @@index([anonymousId, status])
+  @@index([checkInTime])
 }

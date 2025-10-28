@@ -3,7 +3,7 @@ import { CheckInService } from '@/lib/services/CheckInService';
 import { z } from 'zod';
 
 const checkInSchema = z.object({
-    anonymousId: z.string().optional(),
+    anonymousId: z.string().min(1).max(100).optional(),
     deviceInfo: z.string().optional(),
 });
 

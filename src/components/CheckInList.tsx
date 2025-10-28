@@ -113,8 +113,17 @@ export default function CheckInList() {
         }
 
         try {
+            // Get the anonymousId for this check-in
+            const targetCheckIn = checkIns.find(c => c.id === targetCheckoutId);
+            
             const response = await fetch(`/api/checkin/${targetCheckoutId}/checkout`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    anonymousId: targetCheckIn?.anonymousId,
+                }),
             });
 
             if (response.ok) {
