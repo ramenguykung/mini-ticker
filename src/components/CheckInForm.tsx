@@ -21,16 +21,6 @@ export default function CheckInForm() {
     }, []);
 
     const handleCheckIn = async () => {
-        // Check localStorage first - prevent check-in if already checked in
-        const existingCheckInId = localStorage.getItem('checkInId');
-        if (existingCheckInId) {
-            setMessage({ 
-                type: 'error', 
-                text: 'You already have an active check-in on this browser. Please check out first.' 
-            });
-            return;
-        }
-
         setLoading(true);
         setMessage(null);
 
