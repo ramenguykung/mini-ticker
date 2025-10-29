@@ -56,15 +56,6 @@ export default function Home() {
 								</div>
 							</div>
 						</div>
-
-						<div className="mt-6 pt-6 border-t border-gray-200">
-							<Link
-								href="/dashboard"
-								className="block text-center bg-gray-800 text-white py-2 px-4 rounded-md hover:bg-gray-900 transition-colors font-medium"
-							>
-								View Dashboard
-							</Link>
-						</div>
 					</div>
 				</div>
 			</div>

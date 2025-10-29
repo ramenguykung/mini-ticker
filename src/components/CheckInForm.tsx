@@ -180,8 +180,11 @@ export default function CheckInForm() {
 
                 <div className="mt-4 pt-4 border-t border-gray-200">
                     <p className="text-xs text-gray-500">
-                        Your anonymous ID is stored locally on your device, other users can only see a partial part of it in the <Link href="/dashboard" className="text-blue-500 hover:underline">Dashboard</Link>.
+                        Your anonymous ID is stored locally on your device, other users can only see a partial part of it in the Dashboard 
                     </p>
+                </div>
+                <div>  
+                    <Link href="/dashboard" className="block text-center bg-gray-800 text-white py-2 px-4 rounded-md hover:bg-gray-900 transition-colors font-medium">View Dashboard</Link>
                 </div>
             </div>
         </div>
