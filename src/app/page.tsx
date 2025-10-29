@@ -51,7 +51,7 @@ export default function Home() {
 								<div>
 									<h3 className="font-semibold text-gray-900">Check Out</h3>
 									<p className="text-sm text-gray-600">
-										When you&apos;re done, click Check Out to update your status.
+										When you&apos;re done, click <strong>Check Out</strong> to update your status.
 									</p>
 								</div>
 							</div>
