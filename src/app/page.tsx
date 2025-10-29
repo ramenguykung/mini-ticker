@@ -39,7 +39,7 @@ export default function Home() {
 								<div>
 									<h3 className="font-semibold text-gray-900">Check In</h3>
 									<p className="text-sm text-gray-600">
-										Click the Check In button. Your ID is stored locally on your device.
+										Click the Check In button. Your full ID will be stored locally on your device.
 									</p>
 								</div>
 							</div>

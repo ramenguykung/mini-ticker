@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import Link from 'next/link';
 
 export default function CheckInForm() {
     const [anonymousId, setAnonymousId] = useState<string>('');
@@ -179,7 +180,7 @@ export default function CheckInForm() {
 
                 <div className="mt-4 pt-4 border-t border-gray-200">
                     <p className="text-xs text-gray-500">
-                        Your anonymous ID is stored locally on your device and not shared.
+                        Your anonymous ID is stored locally on your device, other users can only see a partial part of it in the <Link href="/dashboard" className="text-blue-500 hover:underline">Dashboard</Link>.
                     </p>
                 </div>
             </div>
