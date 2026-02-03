@@ -174,10 +174,11 @@ export async function registerCredentials(
   }
 
   // Try WebAuthn first if supported
+  // Note: We try WebAuthn even if isPlatformAuthenticatorAvailable returns false,
+  // because on mobile browsers this check can be unreliable and passkeys may still work
   const webauthnSupported = isWebAuthnSupported();
-  const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
 
-  if (webauthnSupported && (hasPlatformAuth || forceMethod === 'webauthn')) {
+  if (webauthnSupported) {
     const result = await webauthnRegister(anonymousId);
 
     if (result.success) {
@@ -206,7 +207,7 @@ export async function registerCredentials(
     return await registerWithSoftwareKey(anonymousId);
   }
 
-  // Fall back to software key
+  // Fall back to software key (WebAuthn not supported)
   return await registerWithSoftwareKey(anonymousId);
 }
 
