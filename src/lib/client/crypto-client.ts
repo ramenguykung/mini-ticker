@@ -1,9 +1,12 @@
 /**
  * Software crypto key management for browsers
  * Uses the Web Crypto API for ECDSA P-256 key generation and signing
+ * 
+ * Keys are stored by anonymousId for reuse across check-in sessions
  */
 
 const STORAGE_KEY_PREFIX = 'mini-ticker-crypto-key-';
+const FINGERPRINT_PREFIX = 'mini-ticker-key-fingerprint-';
 
 /**
  * Generate a new ECDSA P-256 key pair
@@ -50,18 +53,19 @@ export async function importPrivateKey(jwk: JsonWebKey): Promise<CryptoKey> {
 }
 
 /**
- * Store private key in localStorage for a specific check-in
+ * Store private key in localStorage for a specific anonymousId
  */
-export async function storePrivateKey(checkInId: string, privateKey: CryptoKey): Promise<void> {
+export async function storePrivateKey(anonymousId: string, privateKey: CryptoKey, keyFingerprint: string): Promise<void> {
   const jwk = await exportPrivateKey(privateKey);
-  localStorage.setItem(STORAGE_KEY_PREFIX + checkInId, JSON.stringify(jwk));
+  localStorage.setItem(STORAGE_KEY_PREFIX + anonymousId, JSON.stringify(jwk));
+  localStorage.setItem(FINGERPRINT_PREFIX + anonymousId, keyFingerprint);
 }
 
 /**
- * Get private key from localStorage for a specific check-in
+ * Get private key from localStorage for a specific anonymousId
  */
-export async function getPrivateKey(checkInId: string): Promise<CryptoKey | null> {
-  const jwkString = localStorage.getItem(STORAGE_KEY_PREFIX + checkInId);
+export async function getPrivateKey(anonymousId: string): Promise<CryptoKey | null> {
+  const jwkString = localStorage.getItem(STORAGE_KEY_PREFIX + anonymousId);
   if (!jwkString) {
     return null;
   }
@@ -76,17 +80,25 @@ export async function getPrivateKey(checkInId: string): Promise<CryptoKey | null
 }
 
 /**
- * Check if a private key exists for a check-in
+ * Get the stored key fingerprint for an anonymousId
  */
-export function hasPrivateKey(checkInId: string): boolean {
-  return localStorage.getItem(STORAGE_KEY_PREFIX + checkInId) !== null;
+export function getKeyFingerprint(anonymousId: string): string | null {
+  return localStorage.getItem(FINGERPRINT_PREFIX + anonymousId);
 }
 
 /**
- * Remove private key from localStorage
+ * Check if a private key exists for an anonymousId
  */
-export function removePrivateKey(checkInId: string): void {
-  localStorage.removeItem(STORAGE_KEY_PREFIX + checkInId);
+export function hasPrivateKey(anonymousId: string): boolean {
+  return localStorage.getItem(STORAGE_KEY_PREFIX + anonymousId) !== null;
+}
+
+/**
+ * Remove private key and fingerprint from localStorage
+ */
+export function removePrivateKey(anonymousId: string): void {
+  localStorage.removeItem(STORAGE_KEY_PREFIX + anonymousId);
+  localStorage.removeItem(FINGERPRINT_PREFIX + anonymousId);
 }
 
 /**
@@ -108,16 +120,15 @@ export async function signChallenge(
     data
   );
   
-  // Convert to base64url
   return bufferToBase64url(signature);
 }
 
 /**
- * Register a software key for a check-in
+ * Register a software key for an anonymousId
  */
 export async function registerSoftwareKey(
-  checkInId: string
-): Promise<{ success: boolean; error?: string }> {
+  anonymousId: string
+): Promise<{ success: boolean; keyFingerprint?: string; error?: string }> {
   try {
     // Generate a new key pair
     const keyPair = await generateKeyPair();
@@ -125,11 +136,19 @@ export async function registerSoftwareKey(
     // Export the public key
     const publicKeyJwk = await exportPublicKey(keyPair.publicKey);
     
+    // Extract only the necessary public key fields
+    const publicKey = {
+      kty: publicKeyJwk.kty,
+      crv: publicKeyJwk.crv,
+      x: publicKeyJwk.x,
+      y: publicKeyJwk.y,
+    };
+    
     // Send public key to server
     const response = await fetch('/api/auth/software/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId, publicKeyJwk }),
+      body: JSON.stringify({ anonymousId, publicKey }),
     });
     
     if (!response.ok) {
@@ -137,10 +156,12 @@ export async function registerSoftwareKey(
       return { success: false, error: error.error || 'Failed to register software key' };
     }
     
-    // Store private key locally
-    await storePrivateKey(checkInId, keyPair.privateKey);
+    const { keyFingerprint } = await response.json();
     
-    return { success: true };
+    // Store private key and fingerprint locally
+    await storePrivateKey(anonymousId, keyPair.privateKey, keyFingerprint);
+    
+    return { success: true, keyFingerprint };
   } catch (error) {
     console.error('Error registering software key:', error);
     return { success: false, error: 'Failed to generate or store software key' };
@@ -151,20 +172,26 @@ export async function registerSoftwareKey(
  * Verify identity using software key
  */
 export async function verifySoftwareKey(
-  checkInId: string
+  anonymousId: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Get the private key
-    const privateKey = await getPrivateKey(checkInId);
+    const privateKey = await getPrivateKey(anonymousId);
     if (!privateKey) {
-      return { success: false, error: 'No software key found for this check-in' };
+      return { success: false, error: 'No software key found for this user' };
+    }
+    
+    // Get the stored fingerprint
+    const keyFingerprint = getKeyFingerprint(anonymousId);
+    if (!keyFingerprint) {
+      return { success: false, error: 'No key fingerprint found' };
     }
     
     // Get a challenge from the server
     const challengeResponse = await fetch('/api/auth/challenge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId }),
+      body: JSON.stringify({ anonymousId }),
     });
     
     if (!challengeResponse.ok) {
@@ -181,7 +208,7 @@ export async function verifySoftwareKey(
     const verifyResponse = await fetch('/api/auth/software/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId, challenge, signature }),
+      body: JSON.stringify({ anonymousId, keyFingerprint, challenge, signature }),
     });
     
     if (!verifyResponse.ok) {
@@ -193,6 +220,35 @@ export async function verifySoftwareKey(
   } catch (error) {
     console.error('Error verifying software key:', error);
     return { success: false, error: 'Software key verification failed' };
+  }
+}
+
+/**
+ * Check if stored credential is valid on server
+ */
+export async function verifyStoredKeyExists(
+  anonymousId: string
+): Promise<{ valid: boolean; keyFingerprint?: string }> {
+  const keyFingerprint = getKeyFingerprint(anonymousId);
+  if (!keyFingerprint) {
+    return { valid: false };
+  }
+
+  try {
+    const response = await fetch('/api/auth/credentials/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anonymousId, keyFingerprint }),
+    });
+
+    if (!response.ok) {
+      return { valid: false };
+    }
+
+    const data = await response.json();
+    return { valid: data.credentialValid, keyFingerprint };
+  } catch {
+    return { valid: false };
   }
 }
 
