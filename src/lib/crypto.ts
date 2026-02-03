@@ -12,14 +12,22 @@ export function generateChallenge(): string {
 }
 
 /**
+ * Generate a fingerprint (SHA-256 hash) of a public key JWK
+ */
+export function generateKeyFingerprint(publicKeyJwk: JsonWebKey): string {
+  const keyString = JSON.stringify(publicKeyJwk);
+  return crypto.createHash('sha256').update(keyString).digest('hex');
+}
+
+/**
  * Store a challenge for software key verification
  */
-export async function storeChallenge(checkInId: string): Promise<string> {
+export async function storeChallenge(anonymousId: string): Promise<string> {
   const challenge = generateChallenge();
   
   await prisma.authChallenge.create({
     data: {
-      checkInId,
+      anonymousId,
       challenge,
       expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
     },
@@ -31,10 +39,10 @@ export async function storeChallenge(checkInId: string): Promise<string> {
 /**
  * Get and validate a stored challenge
  */
-export async function getValidChallenge(checkInId: string, challenge: string): Promise<boolean> {
+export async function getValidChallenge(anonymousId: string, challenge: string): Promise<boolean> {
   const storedChallenge = await prisma.authChallenge.findFirst({
     where: {
-      checkInId,
+      anonymousId,
       challenge,
       expiresAt: { gt: new Date() },
     },
@@ -53,36 +61,35 @@ export async function getValidChallenge(checkInId: string, challenge: string): P
 }
 
 /**
- * Store a software public key for a check-in
+ * Store a software public key for an anonymousId
  */
 export async function storeSoftwareKey(
-  checkInId: string,
+  anonymousId: string,
   publicKeyJwk: JsonWebKey
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; keyFingerprint?: string; error?: string }> {
   try {
-    // Check if key already exists
+    const keyFingerprint = generateKeyFingerprint(publicKeyJwk);
+
+    // Check if this exact key already exists
     const existing = await prisma.softwareKey.findUnique({
-      where: { checkInId },
+      where: { keyFingerprint },
     });
 
     if (existing) {
-      return { success: false, error: 'Software key already registered for this check-in' };
+      // Key already exists, return its fingerprint
+      return { success: true, keyFingerprint };
     }
 
+    // Create new key
     await prisma.softwareKey.create({
       data: {
-        checkInId,
+        anonymousId,
+        keyFingerprint,
         publicKeyJwk: JSON.stringify(publicKeyJwk),
       },
     });
 
-    // Update the check-in to indicate software verification method
-    await prisma.checkIn.update({
-      where: { id: checkInId },
-      data: { verificationMethod: 'software' },
-    });
-
-    return { success: true };
+    return { success: true, keyFingerprint };
   } catch (error) {
     console.error('Error storing software key:', error);
     return { success: false, error: 'Failed to store software key' };
@@ -90,26 +97,31 @@ export async function storeSoftwareKey(
 }
 
 /**
- * Verify a signature using the stored software public key
- * Uses Web Crypto API compatible ECDSA P-256 verification
+ * Verify a signature using a stored software public key (by fingerprint)
  */
 export async function verifySoftwareSignature(
-  checkInId: string,
+  anonymousId: string,
+  keyFingerprint: string,
   challenge: string,
   signatureBase64: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Get the stored public key
+    // Get the stored public key by fingerprint
     const softwareKey = await prisma.softwareKey.findUnique({
-      where: { checkInId },
+      where: { keyFingerprint },
     });
 
     if (!softwareKey) {
-      return { success: false, error: 'No software key found for this check-in' };
+      return { success: false, error: 'No software key found' };
+    }
+
+    // Verify the key belongs to this anonymousId
+    if (softwareKey.anonymousId !== anonymousId) {
+      return { success: false, error: 'Key does not belong to this user' };
     }
 
     // Validate the challenge
-    const isValidChallenge = await getValidChallenge(checkInId, challenge);
+    const isValidChallenge = await getValidChallenge(anonymousId, challenge);
     if (!isValidChallenge) {
       return { success: false, error: 'Invalid or expired challenge' };
     }
@@ -136,7 +148,6 @@ export async function verifySoftwareSignature(
 
     // Verify the ECDSA signature
     // Web Crypto uses IEEE P1363 format, Node uses DER
-    // We need to convert the signature from IEEE P1363 to DER format
     const derSignature = convertP1363ToDER(signature);
 
     const isValid = crypto.verify(
@@ -162,46 +173,34 @@ export async function verifySoftwareSignature(
 
 /**
  * Convert IEEE P1363 signature format (used by Web Crypto) to DER format (used by Node.js)
- * P1363 format: r || s (each 32 bytes for P-256)
- * DER format: SEQUENCE { INTEGER r, INTEGER s }
  */
 function convertP1363ToDER(signature: Buffer): Buffer {
   const r = signature.subarray(0, 32);
   const s = signature.subarray(32, 64);
 
-  // Remove leading zeros but ensure high bit handling
   const rPadded = addLeadingZeroIfNeeded(trimLeadingZeros(r));
   const sPadded = addLeadingZeroIfNeeded(trimLeadingZeros(s));
 
-  // Build DER structure
   const rLen = rPadded.length;
   const sLen = sPadded.length;
-  const totalLen = 2 + rLen + 2 + sLen; // 2 bytes for each INTEGER header
+  const totalLen = 2 + rLen + 2 + sLen;
 
   const der = Buffer.alloc(2 + totalLen);
   let offset = 0;
 
-  // SEQUENCE header
-  der[offset++] = 0x30; // SEQUENCE tag
+  der[offset++] = 0x30; // SEQUENCE
   der[offset++] = totalLen;
-
-  // INTEGER r
-  der[offset++] = 0x02; // INTEGER tag
+  der[offset++] = 0x02; // INTEGER
   der[offset++] = rLen;
   rPadded.copy(der, offset);
   offset += rLen;
-
-  // INTEGER s
-  der[offset++] = 0x02; // INTEGER tag
+  der[offset++] = 0x02; // INTEGER
   der[offset++] = sLen;
   sPadded.copy(der, offset);
 
   return der;
 }
 
-/**
- * Trim leading zero bytes from a buffer
- */
 function trimLeadingZeros(buf: Buffer): Buffer {
   let i = 0;
   while (i < buf.length - 1 && buf[i] === 0) {
@@ -210,9 +209,6 @@ function trimLeadingZeros(buf: Buffer): Buffer {
   return buf.subarray(i);
 }
 
-/**
- * Add a leading zero byte if the high bit is set (to ensure positive integer in DER)
- */
 function addLeadingZeroIfNeeded(buf: Buffer): Buffer {
   if (buf[0] & 0x80) {
     return Buffer.concat([Buffer.from([0x00]), buf]);
@@ -221,28 +217,46 @@ function addLeadingZeroIfNeeded(buf: Buffer): Buffer {
 }
 
 /**
- * Check if a check-in has a software key registered
+ * Check if an anonymousId has a software key registered
  */
-export async function hasSoftwareKey(checkInId: string): Promise<boolean> {
-  const key = await prisma.softwareKey.findUnique({
-    where: { checkInId },
+export async function hasSoftwareKey(anonymousId: string): Promise<boolean> {
+  const count = await prisma.softwareKey.count({
+    where: { anonymousId },
+  });
+  return count > 0;
+}
+
+/**
+ * Get software keys for an anonymousId
+ */
+export async function getSoftwareKeys(anonymousId: string) {
+  return prisma.softwareKey.findMany({
+    where: { anonymousId },
+    select: {
+      keyFingerprint: true,
+      createdAt: true,
+    },
+  });
+}
+
+/**
+ * Check if a specific keyFingerprint exists on the server
+ */
+export async function verifyKeyExists(
+  anonymousId: string,
+  keyFingerprint: string
+): Promise<boolean> {
+  const key = await prisma.softwareKey.findFirst({
+    where: {
+      anonymousId,
+      keyFingerprint,
+    },
   });
   return !!key;
 }
 
 /**
- * Get the verification method for a check-in
- */
-export async function getVerificationMethod(checkInId: string): Promise<string | null> {
-  const checkIn = await prisma.checkIn.findUnique({
-    where: { id: checkInId },
-    select: { verificationMethod: true },
-  });
-  return checkIn?.verificationMethod || null;
-}
-
-/**
- * Clean up expired challenges (can be called periodically)
+ * Clean up expired challenges
  */
 export async function cleanupExpiredChallenges(): Promise<number> {
   const result = await prisma.authChallenge.deleteMany({
