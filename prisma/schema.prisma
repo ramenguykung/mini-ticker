@@ -27,9 +27,8 @@ model CheckIn {
   // Verification method: 'webauthn', 'software', or null (legacy)
   verificationMethod String?
 
-  // Relations
-  webauthnCredential WebAuthnCredential?
-  softwareKey        SoftwareKey?
+  // Credential identifiers for verification (optional - for linking to credentials)
+  credentialId   String? // For WebAuthn: the credentialId; For software: the keyFingerprint
 
   @@index([anonymousId])
   @@index([status])
@@ -37,36 +36,43 @@ model CheckIn {
   @@index([checkInTime])
 }
 
+// WebAuthn credentials linked to anonymousId (not checkInId)
+// Multiple credentials allowed per anonymousId (different devices)
 model WebAuthnCredential {
   id              String   @id @default(uuid())
-  checkInId       String   @unique
-  credentialId    String   @db.Text // Base64URL encoded
+  anonymousId     String   // NOT unique - multiple credentials per anonymousId
+  credentialId    String   @unique @db.Text // Base64URL encoded, unique identifier
   publicKey       String   @db.Text // Base64URL encoded
   counter         BigInt   @default(0)
   transports      String[] // e.g., ["usb", "ble", "nfc", "internal"]
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-
+  @@index([anonymousId])
   @@index([credentialId])
 }
 
+// Software keys linked to anonymousId (not checkInId)
+// Multiple keys allowed per anonymousId (different devices)
 model SoftwareKey {
   id              String   @id @default(uuid())
-  checkInId       String   @unique
+  anonymousId     String   // NOT unique - multiple keys per anonymousId
+  keyFingerprint  String   @unique // SHA-256 hash of public key for lookup
   publicKeyJwk    String   @db.Text // JSON Web Key format
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  @@index([anonymousId])
+  @@index([keyFingerprint])
 }
 
 model AuthChallenge {
   id          String   @id @default(uuid())
-  checkInId   String
+  anonymousId String   // Changed from checkInId to anonymousId
   challenge   String   @db.VarChar(100)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 
-  @@index([checkInId])
+  @@index([anonymousId])
   @@index([expiresAt])
 }
