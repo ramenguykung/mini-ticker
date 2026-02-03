@@ -3,7 +3,8 @@ import { generateWebAuthnAuthenticationOptions } from '@/lib/webauthn';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  checkInId: z.string().uuid(),
+  anonymousId: z.string().min(1).max(100),
+  credentialId: z.string().optional(), // Optional: if provided, only allow this specific credential
 });
 
 /**
@@ -12,13 +13,13 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkInId } = requestSchema.parse(body);
+    const { anonymousId, credentialId } = requestSchema.parse(body);
 
-    const options = await generateWebAuthnAuthenticationOptions(checkInId);
+    const options = await generateWebAuthnAuthenticationOptions(anonymousId, credentialId);
 
     if (!options) {
       return NextResponse.json(
-        { error: 'No WebAuthn credential found for this check-in' },
+        { error: 'No credentials found for this user' },
         { status: 404 }
       );
     }

@@ -3,8 +3,8 @@ import { storeSoftwareKey } from '@/lib/crypto';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  checkInId: z.string().uuid(),
-  publicKeyJwk: z.object({
+  anonymousId: z.string().min(1).max(100),
+  publicKey: z.object({
     kty: z.literal('EC'),
     crv: z.literal('P-256'),
     x: z.string(),
@@ -18,9 +18,9 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkInId, publicKeyJwk } = requestSchema.parse(body);
+    const { anonymousId, publicKey } = requestSchema.parse(body);
 
-    const result = await storeSoftwareKey(checkInId, publicKeyJwk);
+    const result = await storeSoftwareKey(anonymousId, publicKey);
 
     if (!result.success) {
       return NextResponse.json(
@@ -29,7 +29,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      keyFingerprint: result.keyFingerprint,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -38,7 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('Error storing software key:', error);
+    console.error('Error registering software key:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
