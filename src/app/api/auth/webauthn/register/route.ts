@@ -3,7 +3,6 @@ import { generateWebAuthnRegistrationOptions } from '@/lib/webauthn';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  checkInId: z.string().uuid(),
   anonymousId: z.string().min(1).max(100),
 });
 
@@ -13,9 +12,9 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkInId, anonymousId } = requestSchema.parse(body);
+    const { anonymousId } = requestSchema.parse(body);
 
-    const options = await generateWebAuthnRegistrationOptions(checkInId, anonymousId);
+    const options = await generateWebAuthnRegistrationOptions(anonymousId);
 
     return NextResponse.json(options);
   } catch (error) {

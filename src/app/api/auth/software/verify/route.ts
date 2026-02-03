@@ -3,20 +3,26 @@ import { verifySoftwareSignature } from '@/lib/crypto';
 import { z } from 'zod';
 
 const requestSchema = z.object({
-  checkInId: z.string().uuid(),
-  challenge: z.string().min(1),
-  signature: z.string().min(1),
+  anonymousId: z.string().min(1).max(100),
+  keyFingerprint: z.string(),
+  challenge: z.string(),
+  signature: z.string(),
 });
 
 /**
- * POST /api/auth/software/verify - Verify a software key signature
+ * POST /api/auth/software/verify - Verify a software crypto key signature
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkInId, challenge, signature } = requestSchema.parse(body);
+    const { anonymousId, keyFingerprint, challenge, signature } = requestSchema.parse(body);
 
-    const result = await verifySoftwareSignature(checkInId, challenge, signature);
+    const result = await verifySoftwareSignature(
+      anonymousId,
+      keyFingerprint,
+      challenge,
+      signature
+    );
 
     if (!result.success) {
       return NextResponse.json(
@@ -34,7 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.error('Error verifying signature:', error);
+    console.error('Error verifying software signature:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

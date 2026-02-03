@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 const requestSchema = z.object({
-  checkInId: z.string().uuid(),
+  anonymousId: z.string().min(1).max(100),
   credential: z.object({
     id: z.string(),
     rawId: z.string(),
@@ -26,11 +26,10 @@ const requestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { checkInId, credential } = requestSchema.parse(body);
+    const { anonymousId, credential } = requestSchema.parse(body);
 
-    // Cast to AuthenticationResponseJSON for the library
     const result = await verifyWebAuthnAuthentication(
-      checkInId,
+      anonymousId,
       credential as unknown as AuthenticationResponseJSON
     );
 
@@ -41,7 +40,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, verified: true });
+    return NextResponse.json({ 
+      success: true, 
+      verified: true,
+      credentialId: result.credentialId,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
