@@ -1,13 +1,17 @@
 /**
- * Unified authentication orchestrator
- * Handles the WebAuthn-first-then-software-fallback flow
+ * Unified authentication client
+ * Orchestrates WebAuthn and software crypto key authentication with credential reuse
  */
 
 import {
   isWebAuthnSupported,
   isPlatformAuthenticatorAvailable,
-  startRegistration,
-  startAuthentication,
+  startRegistration as webauthnRegister,
+  startAuthentication as webauthnAuth,
+  hasStoredCredentialId,
+  getStoredCredentialId,
+  removeStoredCredentialId,
+  verifyStoredCredentialExists,
 } from './webauthn-client';
 
 import {
@@ -15,190 +19,277 @@ import {
   verifySoftwareKey,
   hasPrivateKey,
   removePrivateKey,
+  getKeyFingerprint,
+  verifyStoredKeyExists,
 } from './crypto-client';
 
 export type AuthMethod = 'webauthn' | 'software' | null;
-export type RegistrationResult = {
+
+// Storage keys for user profile
+const USER_PROFILE_KEY = 'mini-ticker-user-profile';
+
+interface UserProfile {
+  anonymousId: string;
+  authMethod: AuthMethod;
+  credentialId?: string;
+  keyFingerprint?: string;
+}
+
+export interface RegistrationResult {
   success: boolean;
   method?: AuthMethod;
+  credentialId?: string;
+  keyFingerprint?: string;
   error?: string;
   showChoiceDialog?: boolean;
-};
+}
 
-export type VerificationResult = {
+export interface VerificationResult {
   success: boolean;
   method?: AuthMethod;
   error?: string;
-};
+}
 
-const AUTH_METHOD_KEY_PREFIX = 'mini-ticker-auth-method-';
+export interface StoredCredentialInfo {
+  hasCredential: boolean;
+  method: AuthMethod;
+  isValid: boolean;
+  credentialId?: string;
+  keyFingerprint?: string;
+}
 
 /**
- * Store the authentication method used for a check-in
+ * Store user profile in localStorage
  */
-export function storeAuthMethod(checkInId: string, method: AuthMethod): void {
-  if (method) {
-    localStorage.setItem(AUTH_METHOD_KEY_PREFIX + checkInId, method);
+export function storeUserProfile(profile: UserProfile): void {
+  localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+}
+
+/**
+ * Get user profile from localStorage
+ */
+export function getUserProfile(): UserProfile | null {
+  const profileString = localStorage.getItem(USER_PROFILE_KEY);
+  if (!profileString) return null;
+  try {
+    return JSON.parse(profileString) as UserProfile;
+  } catch {
+    return null;
   }
 }
 
 /**
- * Get the authentication method used for a check-in
+ * Remove user profile
  */
-export function getAuthMethod(checkInId: string): AuthMethod {
-  const method = localStorage.getItem(AUTH_METHOD_KEY_PREFIX + checkInId);
-  return (method as AuthMethod) || null;
+export function removeUserProfile(): void {
+  localStorage.removeItem(USER_PROFILE_KEY);
 }
 
 /**
- * Remove stored authentication method
+ * Check if user has stored credentials for an anonymousId
  */
-export function removeAuthMethod(checkInId: string): void {
-  localStorage.removeItem(AUTH_METHOD_KEY_PREFIX + checkInId);
-}
-
-/**
- * Check if WebAuthn is available and should be offered
- */
-export async function shouldOfferWebAuthn(): Promise<boolean> {
-  if (!isWebAuthnSupported()) {
-    return false;
-  }
-  
-  // Check if platform authenticator is available (Touch ID, Face ID, Windows Hello, etc.)
-  const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
-  return hasPlatformAuth;
-}
-
-/**
- * Register credentials for a check-in session
- * Tries WebAuthn first, then falls back to software key on failure
- * Returns showChoiceDialog: true if user cancelled and should be given a choice
- */
-export async function registerCredentials(
-  checkInId: string,
-  anonymousId: string,
-  forceMethod?: AuthMethod
-): Promise<RegistrationResult> {
-  // If a specific method is forced, use it
-  if (forceMethod === 'software') {
-    const result = await registerSoftwareKey(checkInId);
-    if (result.success) {
-      storeAuthMethod(checkInId, 'software');
-      return { success: true, method: 'software' };
+export async function checkStoredCredentials(anonymousId: string): Promise<StoredCredentialInfo> {
+  // Check for WebAuthn credential
+  if (hasStoredCredentialId(anonymousId)) {
+    const { valid, credentialId } = await verifyStoredCredentialExists(anonymousId);
+    if (valid) {
+      return {
+        hasCredential: true,
+        method: 'webauthn',
+        isValid: true,
+        credentialId,
+      };
     }
-    return { success: false, error: result.error };
-  }
-
-  // Check if WebAuthn should be offered
-  const offerWebAuthn = await shouldOfferWebAuthn();
-  
-  if (!offerWebAuthn) {
-    // WebAuthn not available, use software key directly
-    const result = await registerSoftwareKey(checkInId);
-    if (result.success) {
-      storeAuthMethod(checkInId, 'software');
-      return { success: true, method: 'software' };
-    }
-    return { success: false, error: result.error };
-  }
-
-  // Try WebAuthn first
-  const webauthnResult = await startRegistration(checkInId, anonymousId);
-  
-  if (webauthnResult.success) {
-    storeAuthMethod(checkInId, 'webauthn');
-    return { success: true, method: 'webauthn' };
-  }
-
-  // If user cancelled, show choice dialog instead of auto-falling back
-  if (webauthnResult.cancelled) {
-    return { 
-      success: false, 
-      showChoiceDialog: true,
-      error: 'WebAuthn registration was cancelled'
+    // Orphaned local credential - server doesn't have it
+    return {
+      hasCredential: true,
+      method: 'webauthn',
+      isValid: false,
+      credentialId,
     };
   }
 
-  // For other errors, also show choice dialog
-  return { 
-    success: false, 
-    showChoiceDialog: true,
-    error: webauthnResult.error 
+  // Check for software key
+  if (hasPrivateKey(anonymousId)) {
+    const { valid, keyFingerprint } = await verifyStoredKeyExists(anonymousId);
+    if (valid) {
+      return {
+        hasCredential: true,
+        method: 'software',
+        isValid: true,
+        keyFingerprint,
+      };
+    }
+    // Orphaned local key
+    return {
+      hasCredential: true,
+      method: 'software',
+      isValid: false,
+      keyFingerprint,
+    };
+  }
+
+  return {
+    hasCredential: false,
+    method: null,
+    isValid: false,
   };
 }
 
 /**
- * Verify identity for checkout
- * Tries WebAuthn first if that was the registration method,
- * falls back to software key if WebAuthn fails
+ * Register new credentials or use existing ones
+ * 
+ * @param anonymousId - The user's anonymous ID
+ * @param forceMethod - Force a specific method (skip preference detection)
+ * @param forceNew - Force creating new credentials even if existing ones are valid
  */
-export async function verifyForCheckout(
-  checkInId: string
-): Promise<VerificationResult> {
-  const authMethod = getAuthMethod(checkInId);
-  
-  // Legacy check-ins without credentials
-  if (!authMethod) {
-    // Check if there's a software key stored (might be from before method tracking)
-    if (hasPrivateKey(checkInId)) {
-      const result = await verifySoftwareKey(checkInId);
-      return { 
-        success: result.success, 
-        method: 'software',
-        error: result.error 
+export async function registerCredentials(
+  anonymousId: string,
+  forceMethod?: AuthMethod,
+  forceNew: boolean = false
+): Promise<RegistrationResult> {
+  // If not forcing new, check for existing valid credentials
+  if (!forceNew) {
+    const existing = await checkStoredCredentials(anonymousId);
+    if (existing.hasCredential && existing.isValid) {
+      // Update user profile with existing credentials
+      storeUserProfile({
+        anonymousId,
+        authMethod: existing.method,
+        credentialId: existing.credentialId,
+        keyFingerprint: existing.keyFingerprint,
+      });
+      return {
+        success: true,
+        method: existing.method,
+        credentialId: existing.credentialId,
+        keyFingerprint: existing.keyFingerprint,
       };
     }
-    // No credentials - this is a legacy check-in, allow checkout
+  }
+
+  // Determine which method to use
+  if (forceMethod === 'software') {
+    return await registerWithSoftwareKey(anonymousId);
+  }
+
+  // Try WebAuthn first if supported
+  const webauthnSupported = isWebAuthnSupported();
+  const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
+
+  if (webauthnSupported && (hasPlatformAuth || forceMethod === 'webauthn')) {
+    const result = await webauthnRegister(anonymousId);
+
+    if (result.success) {
+      storeUserProfile({
+        anonymousId,
+        authMethod: 'webauthn',
+        credentialId: result.credentialId,
+      });
+      return {
+        success: true,
+        method: 'webauthn',
+        credentialId: result.credentialId,
+      };
+    }
+
+    // If user cancelled, show choice dialog
+    if (result.cancelled) {
+      return {
+        success: false,
+        showChoiceDialog: true,
+        error: 'WebAuthn registration was cancelled',
+      };
+    }
+
+    // WebAuthn failed for other reason, try software key
+    return await registerWithSoftwareKey(anonymousId);
+  }
+
+  // Fall back to software key
+  return await registerWithSoftwareKey(anonymousId);
+}
+
+/**
+ * Register with software key
+ */
+async function registerWithSoftwareKey(anonymousId: string): Promise<RegistrationResult> {
+  const result = await registerSoftwareKey(anonymousId);
+  
+  if (result.success) {
+    storeUserProfile({
+      anonymousId,
+      authMethod: 'software',
+      keyFingerprint: result.keyFingerprint,
+    });
+    return {
+      success: true,
+      method: 'software',
+      keyFingerprint: result.keyFingerprint,
+    };
+  }
+
+  return {
+    success: false,
+    error: result.error || 'Failed to register software key',
+  };
+}
+
+/**
+ * Verify credentials for checkout
+ */
+export async function verifyForCheckout(anonymousId: string): Promise<VerificationResult> {
+  // Check what credentials we have
+  const stored = await checkStoredCredentials(anonymousId);
+
+  if (!stored.hasCredential) {
+    // No credentials - legacy check-in, allow checkout
     return { success: true, method: null };
   }
 
-  // Try WebAuthn if that's the registered method
-  if (authMethod === 'webauthn') {
-    const webauthnResult = await startAuthentication(checkInId);
-    
-    if (webauthnResult.success) {
+  if (!stored.isValid) {
+    // Orphaned credentials - allow checkout but warn
+    console.warn('Credentials orphaned - allowing checkout without verification');
+    return { success: true, method: null };
+  }
+
+  // Try to verify with the stored method
+  if (stored.method === 'webauthn') {
+    const result = await webauthnAuth(anonymousId, stored.credentialId);
+
+    if (result.success) {
       return { success: true, method: 'webauthn' };
     }
 
-    // If WebAuthn failed (including user cancel), try software key as fallback
-    if (hasPrivateKey(checkInId)) {
-      const softwareResult = await verifySoftwareKey(checkInId);
+    // If WebAuthn failed, try software key as fallback
+    if (hasPrivateKey(anonymousId)) {
+      const softwareResult = await verifySoftwareKey(anonymousId);
       if (softwareResult.success) {
         return { success: true, method: 'software' };
       }
     }
 
-    return { 
-      success: false, 
+    return {
+      success: false,
       method: 'webauthn',
-      error: webauthnResult.error 
+      error: result.error,
     };
   }
 
-  // Software key verification
-  if (authMethod === 'software') {
-    const result = await verifySoftwareKey(checkInId);
-    return { 
-      success: result.success, 
+  if (stored.method === 'software') {
+    const result = await verifySoftwareKey(anonymousId);
+    return {
+      success: result.success,
       method: 'software',
-      error: result.error 
+      error: result.error,
     };
   }
 
-  return { success: false, error: 'Unknown authentication method' };
+  return { success: true, method: null };
 }
 
 /**
- * Clean up all authentication data for a check-in
- */
-export function cleanupAuthData(checkInId: string): void {
-  removeAuthMethod(checkInId);
-  removePrivateKey(checkInId);
-}
-
-/**
- * Get a human-readable description of the auth method
+ * Get the auth method label for display
  */
 export function getAuthMethodLabel(method: AuthMethod): string {
   switch (method) {
@@ -210,3 +301,41 @@ export function getAuthMethodLabel(method: AuthMethod): string {
       return 'None';
   }
 }
+
+/**
+ * Purge all stored credentials for fresh start
+ */
+export function purgeAllCredentials(): void {
+  // Remove user profile
+  removeUserProfile();
+
+  // Find and remove all mini-ticker related items
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith('mini-ticker-')) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+}
+
+/**
+ * Cleanup auth data for a specific anonymousId (for logout without purging profile)
+ */
+export function cleanupAuthData(anonymousId: string): void {
+  removeStoredCredentialId(anonymousId);
+  removePrivateKey(anonymousId);
+}
+
+/**
+ * Re-export useful functions
+ */
+export {
+  isWebAuthnSupported,
+  isPlatformAuthenticatorAvailable,
+  hasStoredCredentialId,
+  getStoredCredentialId,
+  hasPrivateKey,
+  getKeyFingerprint,
+};

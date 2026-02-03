@@ -1,7 +1,11 @@
 /**
  * WebAuthn client-side utilities
  * Uses the Web Authentication API for browser-based credential management
+ * 
+ * Credentials are linked to anonymousId for reuse across check-in sessions
  */
+
+const CREDENTIAL_ID_PREFIX = 'mini-ticker-webauthn-cred-';
 
 /**
  * Check if WebAuthn is supported in this browser
@@ -29,18 +33,74 @@ export async function isPlatformAuthenticatorAvailable(): Promise<boolean> {
 }
 
 /**
+ * Store the credentialId for an anonymousId
+ */
+export function storeCredentialId(anonymousId: string, credentialId: string): void {
+  localStorage.setItem(CREDENTIAL_ID_PREFIX + anonymousId, credentialId);
+}
+
+/**
+ * Get the stored credentialId for an anonymousId
+ */
+export function getStoredCredentialId(anonymousId: string): string | null {
+  return localStorage.getItem(CREDENTIAL_ID_PREFIX + anonymousId);
+}
+
+/**
+ * Check if a credentialId exists for an anonymousId
+ */
+export function hasStoredCredentialId(anonymousId: string): boolean {
+  return localStorage.getItem(CREDENTIAL_ID_PREFIX + anonymousId) !== null;
+}
+
+/**
+ * Remove stored credentialId
+ */
+export function removeStoredCredentialId(anonymousId: string): void {
+  localStorage.removeItem(CREDENTIAL_ID_PREFIX + anonymousId);
+}
+
+/**
+ * Check if stored credential exists on server
+ */
+export async function verifyStoredCredentialExists(
+  anonymousId: string
+): Promise<{ valid: boolean; credentialId?: string }> {
+  const credentialId = getStoredCredentialId(anonymousId);
+  if (!credentialId) {
+    return { valid: false };
+  }
+
+  try {
+    const response = await fetch('/api/auth/credentials/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anonymousId, credentialId }),
+    });
+
+    if (!response.ok) {
+      return { valid: false };
+    }
+
+    const data = await response.json();
+    return { valid: data.credentialValid, credentialId };
+  } catch {
+    return { valid: false };
+  }
+}
+
+/**
  * Start the WebAuthn registration ceremony
  */
 export async function startRegistration(
-  checkInId: string,
   anonymousId: string
-): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
+): Promise<{ success: boolean; credentialId?: string; error?: string; cancelled?: boolean }> {
   try {
     // Get registration options from server
     const optionsResponse = await fetch('/api/auth/webauthn/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId, anonymousId }),
+      body: JSON.stringify({ anonymousId }),
     });
 
     if (!optionsResponse.ok) {
@@ -92,7 +152,7 @@ export async function startRegistration(
     const verifyResponse = await fetch('/api/auth/webauthn/register/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId, credential: credentialJSON }),
+      body: JSON.stringify({ anonymousId, credential: credentialJSON }),
     });
 
     if (!verifyResponse.ok) {
@@ -100,7 +160,12 @@ export async function startRegistration(
       return { success: false, error: error.error || 'Failed to verify registration' };
     }
 
-    return { success: true };
+    const { credentialId } = await verifyResponse.json();
+
+    // Store the credentialId locally
+    storeCredentialId(anonymousId, credentialId);
+
+    return { success: true, credentialId };
   } catch (error) {
     // Handle user cancellation
     if (error instanceof DOMException) {
@@ -121,14 +186,15 @@ export async function startRegistration(
  * Start the WebAuthn authentication ceremony
  */
 export async function startAuthentication(
-  checkInId: string
-): Promise<{ success: boolean; error?: string; cancelled?: boolean }> {
+  anonymousId: string,
+  credentialId?: string
+): Promise<{ success: boolean; credentialId?: string; error?: string; cancelled?: boolean }> {
   try {
     // Get authentication options from server
     const optionsResponse = await fetch('/api/auth/webauthn/authenticate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId }),
+      body: JSON.stringify({ anonymousId, credentialId }),
     });
 
     if (!optionsResponse.ok) {
@@ -182,7 +248,7 @@ export async function startAuthentication(
     const verifyResponse = await fetch('/api/auth/webauthn/authenticate/verify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ checkInId, credential: credentialJSON }),
+      body: JSON.stringify({ anonymousId, credential: credentialJSON }),
     });
 
     if (!verifyResponse.ok) {
@@ -190,7 +256,9 @@ export async function startAuthentication(
       return { success: false, error: error.error || 'Failed to verify authentication' };
     }
 
-    return { success: true };
+    const result = await verifyResponse.json();
+
+    return { success: true, credentialId: result.credentialId };
   } catch (error) {
     // Handle user cancellation
     if (error instanceof DOMException) {
