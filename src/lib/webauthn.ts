@@ -46,8 +46,10 @@ export async function generateWebAuthnRegistrationOptions(
     userName: anonymousId,
     userDisplayName: `User ${anonymousId.substring(0, 8)}`,
     // Prefer passkeys (resident credentials)
+    // Note: Don't restrict authenticatorAttachment to 'platform' - this breaks
+    // passkey prompts on some mobile browsers. Omitting it allows the browser
+    // to offer both platform (biometric) and cross-platform (synced passkeys) options.
     authenticatorSelection: {
-      authenticatorAttachment: 'platform',
       residentKey: 'preferred',
       userVerification: 'preferred',
     },
