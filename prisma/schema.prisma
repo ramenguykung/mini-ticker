@@ -24,8 +24,49 @@ model CheckIn {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Verification method: 'webauthn', 'software', or null (legacy)
+  verificationMethod String?
+
+  // Relations
+  webauthnCredential WebAuthnCredential?
+  softwareKey        SoftwareKey?
+
   @@index([anonymousId])
   @@index([status])
   @@index([anonymousId, status])
   @@index([checkInTime])
+}
+
+model WebAuthnCredential {
+  id              String   @id @default(uuid())
+  checkInId       String   @unique
+  credentialId    String   @db.Text // Base64URL encoded
+  publicKey       String   @db.Text // Base64URL encoded
+  counter         BigInt   @default(0)
+  transports      String[] // e.g., ["usb", "ble", "nfc", "internal"]
+  createdAt       DateTime @default(now())
+
+  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+
+  @@index([credentialId])
+}
+
+model SoftwareKey {
+  id              String   @id @default(uuid())
+  checkInId       String   @unique
+  publicKeyJwk    String   @db.Text // JSON Web Key format
+  createdAt       DateTime @default(now())
+
+  checkIn         CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+}
+
+model AuthChallenge {
+  id          String   @id @default(uuid())
+  checkInId   String
+  challenge   String   @db.VarChar(100)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([checkInId])
+  @@index([expiresAt])
 }
