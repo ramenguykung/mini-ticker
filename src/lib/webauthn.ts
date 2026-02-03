@@ -47,6 +47,7 @@ export async function generateWebAuthnRegistrationOptions(
     userDisplayName: `User ${anonymousId.substring(0, 8)}`,
     // Prefer passkeys (resident credentials)
     authenticatorSelection: {
+      authenticatorAttachment: 'platform',
       residentKey: 'preferred',
       userVerification: 'preferred',
     },
