@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CheckInService } from '@/lib/services/CheckInService';
+import { broadcastStatusChange } from '@/lib/events/broadcaster';
 import { z } from 'zod';
 
 const checkoutSchema = z.object({
@@ -28,6 +29,16 @@ export async function POST(
                 { status: result.error === 'Check-in not found' ? 404 : 
                         result.error === 'Unauthorized: Anonymous ID does not match' ? 403 : 400 }
             );
+        }
+
+        // Broadcast check-out event
+        if (result.data && validatedData.anonymousId) {
+            broadcastStatusChange({
+                type: 'check-out',
+                anonymousId: validatedData.anonymousId,
+                checkInId: id,
+                timestamp: new Date().toISOString(),
+            });
         }
 
         return NextResponse.json(result.success ? result.data : {});

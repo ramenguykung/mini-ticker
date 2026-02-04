@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { CheckInService } from '@/lib/services/CheckInService';
+import { broadcastStatusChange } from '@/lib/events/broadcaster';
 import { z } from 'zod';
 
 const checkInSchema = z.object({
@@ -24,6 +25,16 @@ export async function POST(request: NextRequest) {
                 { error: result.error },
                 { status: 400 }
             );
+        }
+
+        // Broadcast check-in event
+        if (result.data) {
+            broadcastStatusChange({
+                type: 'check-in',
+                anonymousId: result.data.anonymousId,
+                checkInId: result.data.id,
+                timestamp: new Date().toISOString(),
+            });
         }
 
         return NextResponse.json(result.data, { status: 201 });

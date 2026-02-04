@@ -253,10 +253,13 @@ export async function verifyWebAuthnAuthentication(
     return { success: false, error: 'Authentication not verified' };
   }
 
-  // Update the credential counter to prevent replay attacks
+  // Update the credential counter and last used time to prevent replay attacks
   await prisma.webAuthnCredential.update({
     where: { credentialId: credential.id },
-    data: { counter: BigInt(verification.authenticationInfo.newCounter) },
+    data: { 
+      counter: BigInt(verification.authenticationInfo.newCounter),
+      lastUsedAt: new Date(),
+    },
   });
 
   return { success: true, credentialId: credential.id };
@@ -300,4 +303,183 @@ export async function verifyCredentialExists(
     },
   });
   return !!credential;
+}
+
+/**
+ * Generate authentication options for discoverable credentials (no allowCredentials)
+ */
+export async function generateDiscoverableAuthenticationOptions(): Promise<PublicKeyCredentialRequestOptionsJSON> {
+  const options = await generateAuthenticationOptions({
+    rpID: RP_ID,
+    // No allowCredentials - this enables discoverable credential flow
+    userVerification: 'required',
+  });
+
+  // Store challenge without anonymousId (we don't know it yet)
+  // We'll use a temporary ID that we can look up later
+  await prisma.authChallenge.create({
+    data: {
+      anonymousId: 'discoverable', // Placeholder for discoverable flow
+      challenge: options.challenge,
+      expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
+    },
+  });
+
+  return options;
+}
+
+/**
+ * Verify discoverable credential authentication and return the associated anonymousId
+ */
+export async function verifyDiscoverableAuthentication(
+  credential: AuthenticationResponseJSON
+): Promise<{ success: boolean; anonymousId?: string; credentialId?: string; error?: string }> {
+  // Look up the credential by its ID to find the anonymousId
+  const storedCredential = await prisma.webAuthnCredential.findUnique({
+    where: { credentialId: credential.id },
+  });
+
+  if (!storedCredential) {
+    return { success: false, error: 'No credential found' };
+  }
+
+  // Get the stored challenge (for discoverable flow)
+  const storedChallenge = await prisma.authChallenge.findFirst({
+    where: {
+      anonymousId: 'discoverable',
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!storedChallenge) {
+    return { success: false, error: 'Challenge expired or not found' };
+  }
+
+  let verification: VerifiedAuthenticationResponse;
+  try {
+    verification = await verifyAuthenticationResponse({
+      response: credential,
+      expectedChallenge: storedChallenge.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      credential: {
+        id: storedCredential.credentialId,
+        publicKey: Buffer.from(storedCredential.publicKey, 'base64url'),
+        counter: Number(storedCredential.counter),
+        transports: storedCredential.transports as AuthenticatorTransportFuture[],
+      },
+    });
+  } catch (error) {
+    console.error('Discoverable WebAuthn authentication verification failed:', error);
+    return { success: false, error: 'Verification failed' };
+  }
+
+  // Clean up the used challenge
+  await prisma.authChallenge.delete({
+    where: { id: storedChallenge.id },
+  });
+
+  if (!verification.verified) {
+    return { success: false, error: 'Authentication not verified' };
+  }
+
+  // Update the credential counter and last used time
+  await prisma.webAuthnCredential.update({
+    where: { credentialId: credential.id },
+    data: { 
+      counter: BigInt(verification.authenticationInfo.newCounter),
+      lastUsedAt: new Date(),
+    },
+  });
+
+  return { 
+    success: true, 
+    anonymousId: storedCredential.anonymousId,
+    credentialId: credential.id,
+  };
+}
+
+/**
+ * List all passkeys for an anonymousId with metadata
+ */
+export async function listPasskeys(anonymousId: string) {
+  return prisma.webAuthnCredential.findMany({
+    where: { anonymousId },
+    select: {
+      id: true,
+      credentialId: true,
+      name: true,
+      transports: true,
+      createdAt: true,
+      lastUsedAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+/**
+ * Rename a passkey
+ */
+export async function renamePasskey(
+  id: string,
+  anonymousId: string,
+  name: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Verify ownership
+    const credential = await prisma.webAuthnCredential.findUnique({
+      where: { id },
+    });
+
+    if (!credential) {
+      return { success: false, error: 'Passkey not found' };
+    }
+
+    if (credential.anonymousId !== anonymousId) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    await prisma.webAuthnCredential.update({
+      where: { id },
+      data: { name },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error renaming passkey:', error);
+    return { success: false, error: 'Failed to rename passkey' };
+  }
+}
+
+/**
+ * Delete a passkey
+ */
+export async function deletePasskey(
+  id: string,
+  anonymousId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Verify ownership
+    const credential = await prisma.webAuthnCredential.findUnique({
+      where: { id },
+    });
+
+    if (!credential) {
+      return { success: false, error: 'Passkey not found' };
+    }
+
+    if (credential.anonymousId !== anonymousId) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    await prisma.webAuthnCredential.delete({
+      where: { id },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting passkey:', error);
+    return { success: false, error: 'Failed to delete passkey' };
+  }
 }

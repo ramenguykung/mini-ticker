@@ -223,28 +223,36 @@ export class CheckInService {
 
     /**
      * Check out a user (update status and set checkout time)
+     * Idempotent - only succeeds if currently checked in
      */
     async checkOut(id: string, anonymousId?: string) {
         try {
-            // If anonymousId is provided, verify it matches the check-in record
-            if (anonymousId) {
-                const checkIn = await prisma.checkIn.findUnique({
-                    where: { id },
-                });
+            // Get the check-in record
+            const checkIn = await prisma.checkIn.findUnique({
+                where: { id },
+            });
 
-                if (!checkIn) {
-                    return {
-                        success: false,
-                        error: 'Check-in not found',
-                    };
-                }
+            if (!checkIn) {
+                return {
+                    success: false,
+                    error: 'Check-in not found',
+                };
+            }
 
-                if (checkIn.anonymousId !== anonymousId) {
-                    return {
-                        success: false,
-                        error: 'Unauthorized: Anonymous ID does not match',
-                    };
-                }
+            // If anonymousId is provided, verify it matches
+            if (anonymousId && checkIn.anonymousId !== anonymousId) {
+                return {
+                    success: false,
+                    error: 'Unauthorized: Anonymous ID does not match',
+                };
+            }
+
+            // Idempotency check - only check out if currently active
+            if (checkIn.status !== 'active') {
+                return {
+                    success: false,
+                    error: 'Check-in is not active',
+                };
             }
 
             return this.update(id, {
