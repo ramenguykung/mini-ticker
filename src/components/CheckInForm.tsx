@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Link from 'next/link';
 import {
@@ -10,8 +10,12 @@ import {
     getUserProfile,
     checkStoredCredentials,
     getAuthMethodLabel,
+    storeUserProfile,
+    startDiscoverableAuthentication,
     type AuthMethod,
 } from '@/lib/client/auth-client';
+import { useStatusEvents } from '@/hooks/useStatusEvents';
+import PasskeyManager from './PasskeyManager';
 
 // Icons
 const PasskeyIcon = () => (
@@ -49,6 +53,34 @@ export default function CheckInForm() {
     
     // Pending check-in ID for auth choice flow
     const [pendingAnonymousId, setPendingAnonymousId] = useState<string | null>(null);
+
+    // SSE for real-time status updates
+    const handleStatusChange = useCallback((event: { type: string; anonymousId?: string; checkInId?: string }) => {
+        if (event.type === 'check-out' && event.anonymousId === anonymousId) {
+            // Another device checked out - update UI
+            setIsCheckedIn(false);
+            localStorage.removeItem('checkInId');
+            setMessage({ 
+                type: 'info', 
+                text: 'You were checked out from another device' 
+            });
+        } else if (event.type === 'check-in' && event.anonymousId === anonymousId) {
+            // Another device checked in - update UI if we weren't already checked in
+            if (!isCheckedIn && event.checkInId) {
+                setIsCheckedIn(true);
+                localStorage.setItem('checkInId', event.checkInId);
+                setMessage({ 
+                    type: 'info', 
+                    text: 'You checked in from another device' 
+                });
+            }
+        }
+    }, [anonymousId, isCheckedIn]);
+
+    useStatusEvents({
+        anonymousId: anonymousId || null,
+        onStatusChange: handleStatusChange,
+    });
 
     // Check localStorage and user profile on mount
     useEffect(() => {
@@ -300,6 +332,80 @@ export default function CheckInForm() {
         setMessage(null);
     };
 
+    // Sign in with discoverable passkey
+    const handleSignInWithPasskey = async () => {
+        setLoading(true);
+        setMessage({ type: 'info', text: 'Please authenticate with your passkey...' });
+
+        try {
+            const result = await startDiscoverableAuthentication();
+
+            if (!result.success) {
+                if (result.cancelled) {
+                    setMessage({ type: 'info', text: 'Authentication cancelled' });
+                } else {
+                    setMessage({ 
+                        type: 'error', 
+                        text: result.error || 'Failed to authenticate with passkey' 
+                    });
+                }
+                setLoading(false);
+                return;
+            }
+
+            // Successfully authenticated - restore session
+            if (result.anonymousId) {
+                setAnonymousId(result.anonymousId);
+                localStorage.setItem('anonymousId', result.anonymousId);
+                
+                // Store user profile
+                storeUserProfile({
+                    anonymousId: result.anonymousId,
+                    authMethod: 'webauthn',
+                    credentialId: result.credentialId,
+                });
+                
+                setAuthMethod('webauthn');
+                
+                // Check if there's an active check-in for this anonymousId
+                const response = await fetch(`/api/checkin?anonymousId=${result.anonymousId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    const activeCheckIn = data.find((ci: { status: string }) => ci.status === 'active');
+                    
+                    if (activeCheckIn) {
+                        localStorage.setItem('checkInId', activeCheckIn.id);
+                        setIsCheckedIn(true);
+                        setMessage({ 
+                            type: 'success', 
+                            text: 'Signed in successfully! Session restored.' 
+                        });
+                    } else {
+                        setMessage({ 
+                            type: 'success', 
+                            text: 'Signed in successfully! You can now check in.' 
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Discoverable auth error:', err);
+            setMessage({ type: 'error', text: 'Failed to sign in with passkey' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Handle adding a new passkey
+    const handleAddPasskey = async () => {
+        if (!anonymousId) return;
+        
+        const result = await registerCredentials(anonymousId, 'webauthn', true);
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to add passkey');
+        }
+    };
+
     return (
         <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-2xl">
             <h2 className="text-2xl font-bold mb-6 text-gray-800">Check-In System</h2>
@@ -329,6 +435,26 @@ export default function CheckInForm() {
                     <div className="flex items-center gap-2 p-2 bg-gray-50 rounded-md text-sm text-gray-600">
                         {authMethod === 'webauthn' ? <PasskeyIcon /> : <SoftwareKeyIcon />}
                         <span>Secured with: {getAuthMethodLabel(authMethod)}</span>
+                    </div>
+                )}
+
+                {/* Sign in with Passkey button */}
+                {!isCheckedIn && !anonymousId && !showAuthChoice && !showExistingCredChoice && (
+                    <div className="p-4 bg-purple-50 border border-purple-200 rounded-md">
+                        <p className="text-sm text-purple-800 mb-2 font-medium">
+                            Continue on another device?
+                        </p>
+                        <p className="text-xs text-purple-600 mb-3">
+                            Sign in with your synced passkey to restore your session
+                        </p>
+                        <button
+                            onClick={handleSignInWithPasskey}
+                            disabled={loading}
+                            className="w-full bg-purple-500 text-white py-2 px-3 rounded-md hover:bg-purple-600 disabled:bg-gray-400 text-sm font-medium flex items-center justify-center gap-2"
+                        >
+                            <PasskeyIcon />
+                            Sign in with Passkey
+                        </button>
                     </div>
                 )}
 
@@ -479,6 +605,14 @@ export default function CheckInForm() {
                             <p className="text-sm">{message.text}</p>
                         )}
                     </div>
+                )}
+
+                {/* Passkey Manager - only show for users with passkeys */}
+                {anonymousId && authMethod === 'webauthn' && (
+                    <PasskeyManager 
+                        anonymousId={anonymousId}
+                        onAddPasskey={handleAddPasskey}
+                    />
                 )}
 
                 <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">

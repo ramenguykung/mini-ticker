@@ -7,9 +7,10 @@ import { renamePasskey, deletePasskey } from '@/lib/webauthn';
  */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { anonymousId, name } = body;
 
@@ -20,7 +21,7 @@ export async function PATCH(
       );
     }
 
-    const result = await renamePasskey(params.id, anonymousId, name);
+    const result = await renamePasskey(id, anonymousId, name);
 
     if (!result.success) {
       return NextResponse.json(
@@ -45,9 +46,10 @@ export async function PATCH(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const { searchParams } = new URL(request.url);
     const anonymousId = searchParams.get('anonymousId');
 
@@ -58,7 +60,7 @@ export async function DELETE(
       );
     }
 
-    const result = await deletePasskey(params.id, anonymousId);
+    const result = await deletePasskey(id, anonymousId);
 
     if (!result.success) {
       return NextResponse.json(

@@ -8,6 +8,7 @@ import {
   isPlatformAuthenticatorAvailable,
   startRegistration as webauthnRegister,
   startAuthentication as webauthnAuth,
+  startDiscoverableAuthentication,
   hasStoredCredentialId,
   getStoredCredentialId,
   removeStoredCredentialId,
@@ -339,4 +340,5 @@ export {
   getStoredCredentialId,
   hasPrivateKey,
   getKeyFingerprint,
+  startDiscoverableAuthentication,
 };

@@ -275,6 +275,105 @@ export async function startAuthentication(
   }
 }
 
+/**
+ * Start discoverable credential authentication (no anonymousId required)
+ */
+export async function startDiscoverableAuthentication(): Promise<{ 
+  success: boolean; 
+  anonymousId?: string; 
+  credentialId?: string; 
+  error?: string; 
+  cancelled?: boolean 
+}> {
+  try {
+    // Get authentication options from server (no anonymousId)
+    const optionsResponse = await fetch('/api/auth/webauthn/authenticate-discoverable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    if (!optionsResponse.ok) {
+      const error = await optionsResponse.json();
+      return { success: false, error: error.error || 'Failed to get authentication options' };
+    }
+
+    const options = await optionsResponse.json();
+
+    // Convert base64url strings to ArrayBuffers for the browser API
+    const publicKeyOptions: PublicKeyCredentialRequestOptions = {
+      ...options,
+      challenge: base64urlToBuffer(options.challenge),
+      // No allowCredentials - this enables discoverable credential flow
+    };
+
+    // Get credential using the browser's authenticator
+    const credential = await navigator.credentials.get({
+      publicKey: publicKeyOptions,
+    }) as PublicKeyCredential | null;
+
+    if (!credential) {
+      return { success: false, error: 'No credential returned', cancelled: true };
+    }
+
+    // Convert the credential to JSON format for sending to server
+    const assertionResponse = credential.response as AuthenticatorAssertionResponse;
+    const credentialJSON = {
+      id: credential.id,
+      rawId: bufferToBase64url(credential.rawId),
+      response: {
+        clientDataJSON: bufferToBase64url(assertionResponse.clientDataJSON),
+        authenticatorData: bufferToBase64url(assertionResponse.authenticatorData),
+        signature: bufferToBase64url(assertionResponse.signature),
+        userHandle: assertionResponse.userHandle 
+          ? bufferToBase64url(assertionResponse.userHandle) 
+          : undefined,
+      },
+      type: credential.type,
+      clientExtensionResults: credential.getClientExtensionResults(),
+      authenticatorAttachment: (credential as PublicKeyCredential & { authenticatorAttachment?: string }).authenticatorAttachment,
+    };
+
+    // Verify the credential with the server
+    const verifyResponse = await fetch('/api/auth/webauthn/authenticate-discoverable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: credentialJSON }),
+    });
+
+    if (!verifyResponse.ok) {
+      const error = await verifyResponse.json();
+      return { success: false, error: error.error || 'Failed to verify authentication' };
+    }
+
+    const result = await verifyResponse.json();
+
+    // Store the credentialId locally for the newly discovered anonymousId
+    if (result.anonymousId && result.credentialId) {
+      storeCredentialId(result.anonymousId, result.credentialId);
+    }
+
+    return { 
+      success: true, 
+      anonymousId: result.anonymousId,
+      credentialId: result.credentialId,
+    };
+  } catch (error) {
+    // Handle user cancellation
+    if (error instanceof DOMException) {
+      if (error.name === 'NotAllowedError') {
+        return { success: false, error: 'User cancelled or denied the request', cancelled: true };
+      }
+      if (error.name === 'AbortError') {
+        return { success: false, error: 'Request was aborted', cancelled: true };
+      }
+    }
+    
+    console.error('Discoverable WebAuthn authentication error:', error);
+    return { success: false, error: 'Authentication failed' };
+  }
+}
+
 // Helper functions for base64url conversion
 
 function base64urlToBuffer(base64url: string): ArrayBuffer {
