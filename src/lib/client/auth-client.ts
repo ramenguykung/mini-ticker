@@ -146,7 +146,7 @@ export async function checkStoredCredentials(anonymousId: string): Promise<Store
 export async function registerCredentials(
   anonymousId: string,
   forceMethod?: AuthMethod,
-  forceNew: boolean = false
+  forceNew = false
 ): Promise<RegistrationResult> {
   // If not forcing new, check for existing valid credentials
   if (!forceNew) {
