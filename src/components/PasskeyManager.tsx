@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Passkey {
   id: string;
@@ -24,7 +24,7 @@ export default function PasskeyManager({ anonymousId, onAddPasskey }: PasskeyMan
   const [editingName, setEditingName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const loadPasskeys = async () => {
+  const loadPasskeys = useCallback(async () => {
     try {
       const response = await fetch(`/api/auth/passkeys?anonymousId=${anonymousId}`);
       if (response.ok) {
@@ -34,13 +34,13 @@ export default function PasskeyManager({ anonymousId, onAddPasskey }: PasskeyMan
     } catch (err) {
       console.error('Failed to load passkeys:', err);
     }
-  };
+  }, [anonymousId]);
 
   useEffect(() => {
     if (expanded) {
       loadPasskeys();
     }
-  }, [expanded, anonymousId]);
+  }, [expanded, loadPasskeys]);
 
   const handleRename = async (id: string) => {
     if (!editingName.trim()) {
