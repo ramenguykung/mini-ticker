@@ -24,6 +24,28 @@ const ORIGIN = process.env.WEBAUTHN_ORIGIN || 'http://localhost:3000';
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 
 /**
+ * Format user display name for passkey credential
+ * Extracts first segment before '-' and limits to 20 grapheme clusters
+ */
+function formatUserDisplayName(anonymousId: string): string {
+  // Get first segment before '-'
+  const firstSegment = anonymousId.split('-')[0];
+  
+  // Limit to 20 grapheme clusters (visual characters) for safe display
+  // Use Intl.Segmenter for proper Unicode handling
+  const segmenter = new Intl.Segmenter('en', { granularity: 'grapheme' });
+  const graphemes = [...segmenter.segment(firstSegment)].slice(0, 20);
+  const truncated = graphemes.map(g => g.segment).join('');
+  
+  // Add ellipsis if truncated
+  const display = truncated.length < firstSegment.length 
+    ? `${truncated}…` 
+    : truncated;
+  
+  return `User: ${display}`;
+}
+
+/**
  * Generate WebAuthn registration options for an anonymousId
  */
 export async function generateWebAuthnRegistrationOptions(
@@ -44,7 +66,7 @@ export async function generateWebAuthnRegistrationOptions(
     rpName: RP_NAME,
     rpID: RP_ID,
     userName: anonymousId,
-    userDisplayName: `User ${anonymousId.substring(0, 8)}`,
+    userDisplayName: formatUserDisplayName(anonymousId),
     // Prefer passkeys (resident credentials)
     // Note: Don't restrict authenticatorAttachment to 'platform' - this breaks
     // passkey prompts on some mobile browsers. Omitting it allows the browser
