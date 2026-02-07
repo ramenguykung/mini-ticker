@@ -36,7 +36,7 @@ model CheckIn {
   @@index([checkInTime])
 }
 
-// WebAuthn credentials linked to anonymousId (not checkInId)
+// WebAuthn credentials linked to anonymousId
 // Multiple credentials allowed per anonymousId (different devices)
 model WebAuthnCredential {
   id              String   @id @default(uuid())
@@ -52,7 +52,7 @@ model WebAuthnCredential {
   @@index([credentialId])
 }
 
-// Software keys linked to anonymousId (not checkInId)
+// Software keys linked to anonymousId
 // Multiple keys allowed per anonymousId (different devices)
 model SoftwareKey {
   id              String   @id @default(uuid())
@@ -68,7 +68,7 @@ model SoftwareKey {
 
 model AuthChallenge {
   id          String   @id @default(uuid())
-  anonymousId String   // Changed from checkInId to anonymousId
+  anonymousId String
   challenge   String   @db.VarChar(100)
   expiresAt   DateTime
   createdAt   DateTime @default(now())
