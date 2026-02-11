@@ -18,7 +18,17 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        
+        let body;
+        try {
+            body = await request.json();
+        } catch (jsonError) {
+            return NextResponse.json(
+                { error: 'Invalid JSON in request body' },
+                { status: 400 }
+            );
+        }
+        
         const validatedData = updateSchema.parse(body);
 
         const updateData = {

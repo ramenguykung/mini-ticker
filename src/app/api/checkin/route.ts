@@ -14,7 +14,18 @@ const service = new CheckInService();
  */
 export async function POST(request: NextRequest) {
     try {
-        const body = await request.json();
+        let body;
+        
+        // Handle JSON parsing errors (empty body, malformed JSON, etc.)
+        try {
+            body = await request.json();
+        } catch (jsonError) {
+            return NextResponse.json(
+                { error: 'Invalid JSON in request body' },
+                { status: 400 }
+            );
+        }
+
         const validatedData = checkInSchema.parse(body);
 
         const result = await service.insert(validatedData);

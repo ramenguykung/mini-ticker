@@ -17,7 +17,17 @@ export async function POST(
 ) {
     try {
         const { id } = await params;
-        const body = await request.json();
+        
+        let body;
+        try {
+            body = await request.json();
+        } catch (jsonError) {
+            return NextResponse.json(
+                { error: 'Invalid JSON in request body' },
+                { status: 400 }
+            );
+        }
+        
         const validatedData = checkoutSchema.parse(body);
 
         const result = await service.checkOut(id, validatedData.anonymousId);
