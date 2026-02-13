@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CheckIn {
     id: string;
@@ -91,27 +92,40 @@ export default function CheckInList() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {activeCheckIns.map((checkIn) => (
-                                    <tr key={checkIn.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                            {checkIn.anonymousId.slice(0, 8)}...
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span
-                                                className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                    checkIn.status === 'active'
-                                                        ? 'bg-green-100 text-green-800'
-                                                        : 'bg-gray-100 text-gray-800'
-                                                }`}
-                                            >
-                                                {checkIn.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {new Date(checkIn.checkInTime).toLocaleString()}
-                                        </td>
-                                    </tr>
-                                ))}
+                                <AnimatePresence mode="popLayout">
+                                    {activeCheckIns.map((checkIn, index) => (
+                                        <motion.tr 
+                                            key={checkIn.id} 
+                                            className="hover:bg-gray-50"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: 20 }}
+                                            transition={{
+                                                duration: 0.3,
+                                                delay: index * 0.05,
+                                            }}
+                                            layout
+                                        >
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                                                {checkIn.anonymousId.slice(0, 8)}...
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span
+                                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                        checkIn.status === 'active'
+                                                            ? 'bg-green-100 text-green-800'
+                                                            : 'bg-gray-100 text-gray-800'
+                                                    }`}
+                                                >
+                                                    {checkIn.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {new Date(checkIn.checkInTime).toLocaleString()}
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                </AnimatePresence>
                             </tbody>
                         </table>
                     </div>
@@ -149,27 +163,40 @@ export default function CheckInList() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {inactiveCheckIns.map((checkIn) => (
-                                    <tr key={checkIn.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                            {checkIn.anonymousId.slice(0, 8)}...
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                                {checkIn.status}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {new Date(checkIn.checkInTime).toLocaleString()}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            {checkIn.checkOutTime 
-                                                ? new Date(checkIn.checkOutTime).toLocaleString()
-                                                : '-'
-                                            }
-                                        </td>
-                                    </tr>
-                                ))}
+                                <AnimatePresence mode="popLayout">
+                                    {inactiveCheckIns.map((checkIn, index) => (
+                                        <motion.tr 
+                                            key={checkIn.id} 
+                                            className="hover:bg-gray-50"
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: 20 }}
+                                            transition={{
+                                                duration: 0.3,
+                                                delay: index * 0.05,
+                                            }}
+                                            layout
+                                        >
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                                                {checkIn.anonymousId.slice(0, 8)}...
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                    {checkIn.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {new Date(checkIn.checkInTime).toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {checkIn.checkOutTime 
+                                                    ? new Date(checkIn.checkOutTime).toLocaleString()
+                                                    : '-'
+                                                }
+                                            </td>
+                                        </motion.tr>
+                                    ))}
+                                </AnimatePresence>
                             </tbody>
                         </table>
                     </div>

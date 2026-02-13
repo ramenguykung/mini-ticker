@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import PageTransition from '@/components/PageTransition';
 
 interface CheckIn {
     id: string;
@@ -160,7 +162,8 @@ export default function AdminCheckIns() {
     const inactiveCheckIns = checkIns.filter(c => c.status !== 'active');
 
     return (
-        <main className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 py-12 px-4">
+        <PageTransition>
+            <main className="min-h-screen bg-linear-to-br from-gray-50 to-gray-100 py-12 px-4">
             <div className="max-w-7xl mx-auto">
                 <div className="flex justify-between items-center mb-8">
                     <div>
@@ -211,41 +214,54 @@ export default function AdminCheckIns() {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {activeCheckIns.map((checkIn) => (
-                                            <tr key={checkIn.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                                    {checkIn.anonymousId.slice(0, 8)}...
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span
-                                                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                                            checkIn.status === 'active'
-                                                                ? 'bg-green-100 text-green-800'
-                                                                : 'bg-gray-100 text-gray-800'
-                                                        }`}
-                                                    >
-                                                        {checkIn.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {new Date(checkIn.checkInTime).toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                                                    <button
-                                                        onClick={() => handleCheckout(checkIn.id)}
-                                                        className="text-blue-600 hover:text-blue-900 font-medium"
-                                                    >
-                                                        Check Out
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDelete(checkIn.id)}
-                                                        className="text-red-600 hover:text-red-900 font-medium"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        <AnimatePresence mode="popLayout">
+                                            {activeCheckIns.map((checkIn, index) => (
+                                                <motion.tr 
+                                                    key={checkIn.id} 
+                                                    className="hover:bg-gray-50"
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    exit={{ opacity: 0, x: 20 }}
+                                                    transition={{
+                                                        duration: 0.3,
+                                                        delay: index * 0.05,
+                                                    }}
+                                                    layout
+                                                >
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                                                        {checkIn.anonymousId.slice(0, 8)}...
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span
+                                                            className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                                                checkIn.status === 'active'
+                                                                    ? 'bg-green-100 text-green-800'
+                                                                    : 'bg-gray-100 text-gray-800'
+                                                            }`}
+                                                        >
+                                                            {checkIn.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {new Date(checkIn.checkInTime).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
+                                                        <button
+                                                            onClick={() => handleCheckout(checkIn.id)}
+                                                            className="text-blue-600 hover:text-blue-900 font-medium"
+                                                        >
+                                                            Check Out
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDelete(checkIn.id)}
+                                                            className="text-red-600 hover:text-red-900 font-medium"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                </motion.tr>
+                                            ))}
+                                        </AnimatePresence>
                                     </tbody>
                                 </table>
                             </div>
@@ -286,35 +302,48 @@ export default function AdminCheckIns() {
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
-                                        {inactiveCheckIns.map((checkIn) => (
-                                            <tr key={checkIn.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-                                                    {checkIn.anonymousId.slice(0, 8)}...
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                                        {checkIn.status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {new Date(checkIn.checkInTime).toLocaleString()}
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {checkIn.checkOutTime 
-                                                        ? new Date(checkIn.checkOutTime).toLocaleString()
-                                                        : '-'
-                                                    }
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                    <button
-                                                        onClick={() => handleDelete(checkIn.id)}
-                                                        className="text-red-600 hover:text-red-900 font-medium"
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        <AnimatePresence mode="popLayout">
+                                            {inactiveCheckIns.map((checkIn, index) => (
+                                                <motion.tr 
+                                                    key={checkIn.id} 
+                                                    className="hover:bg-gray-50"
+                                                    initial={{ opacity: 0, x: -20 }}
+                                                    animate={{ opacity: 1, x: 0 }}
+                                                    exit={{ opacity: 0, x: 20 }}
+                                                    transition={{
+                                                        duration: 0.3,
+                                                        delay: index * 0.05,
+                                                    }}
+                                                    layout
+                                                >
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
+                                                        {checkIn.anonymousId.slice(0, 8)}...
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                            {checkIn.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {new Date(checkIn.checkInTime).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {checkIn.checkOutTime 
+                                                            ? new Date(checkIn.checkOutTime).toLocaleString()
+                                                            : '-'
+                                                        }
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                        <button
+                                                            onClick={() => handleDelete(checkIn.id)}
+                                                            className="text-red-600 hover:text-red-900 font-medium"
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </td>
+                                                </motion.tr>
+                                            ))}
+                                        </AnimatePresence>
                                     </tbody>
                                 </table>
                             </div>
@@ -323,9 +352,22 @@ export default function AdminCheckIns() {
                 </div>
 
                 {/* Delete Confirmation Modal */}
-                {deleteModalOpen && (
-                    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+                <AnimatePresence>
+                    {deleteModalOpen && (
+                        <motion.div 
+                            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            <motion.div 
+                                className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6"
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                            >
                             <h3 className="text-lg font-bold text-gray-900 mb-4">
                                 Confirm Deletion
                             </h3>
@@ -372,14 +414,29 @@ export default function AdminCheckIns() {
                                     Delete
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                )}
+
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Checkout Confirmation Modal */}
-                {checkoutModalOpen && (
-                    <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+                <AnimatePresence>
+                    {checkoutModalOpen && (
+                        <motion.div 
+                            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            <motion.div 
+                                className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6"
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ duration: 0.2 }}
+                            >
                             <h3 className="text-lg font-bold text-gray-900 mb-4">
                                 Confirm Check Out
                             </h3>
@@ -426,10 +483,12 @@ export default function AdminCheckIns() {
                                     Check Out
                                 </button>
                             </div>
-                        </div>
-                    </div>
-                )}
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
         </main>
+        </PageTransition>
     );
 }
