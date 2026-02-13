@@ -14,21 +14,10 @@ export default function CheckInList() {
     const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-    const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
-    const [targetDeleteId, setTargetDeleteId] = useState<string | null>(null);
-    const [targetCheckoutId, setTargetCheckoutId] = useState<string | null>(null);
-    const [checkInIdInput, setCheckInIdInput] = useState('');
-    const [deleteError, setDeleteError] = useState<string | null>(null);
-    const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
-    const fetchCheckIns = async (bypassCache = false) => {
+    const fetchCheckIns = async () => {
         try {
-            const url = bypassCache 
-                ? `/api/checkin?nocache=${Date.now()}` 
-                : '/api/checkin';
-            
-            const response = await fetch(url);
+            const response = await fetch('/api/checkin');
             
             if (!response.ok) {
                 throw new Error('Failed to fetch check-ins');
@@ -52,102 +41,6 @@ export default function CheckInList() {
         const interval = setInterval(fetchCheckIns, 5000);
         return () => clearInterval(interval);
     }, []);
-
-    const handleDelete = async (id: string) => {
-        setTargetDeleteId(id);
-        setCheckInIdInput('');
-        setDeleteError(null);
-        setDeleteModalOpen(true);
-    };
-
-    const handleCheckout = async (id: string) => {
-        setTargetCheckoutId(id);
-        setCheckInIdInput('');
-        setCheckoutError(null);
-        setCheckoutModalOpen(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!targetDeleteId) return;
-
-        if (checkInIdInput.trim() !== targetDeleteId) {
-            setDeleteError('Incorrect Check-In ID. Deletion denied.');
-            return;
-        }
-
-        try {
-            const response = await fetch(`/api/checkin/${targetDeleteId}`, {
-                method: 'DELETE',
-            });
-
-            if (response.ok) {
-                setCheckIns(checkIns.filter(c => c.id !== targetDeleteId));
-                setDeleteModalOpen(false);
-                setTargetDeleteId(null);
-                setCheckInIdInput('');
-                setDeleteError(null);
-                
-                // Force immediate refresh with cache bypass
-                await fetchCheckIns(true);
-            } else {
-                setDeleteError('Failed to delete check-in. Please try again.');
-            }
-        } catch {
-            setDeleteError('Network error. Please try again.');
-        }
-    };
-
-    const cancelDelete = () => {
-        setDeleteModalOpen(false);
-        setTargetDeleteId(null);
-        setCheckInIdInput('');
-        setDeleteError(null);
-    };
-
-    const confirmCheckout = async () => {
-        if (!targetCheckoutId) return;
-
-        if (checkInIdInput.trim() !== targetCheckoutId) {
-            setCheckoutError('Incorrect Check-In ID. Checkout denied.');
-            return;
-        }
-
-        try {
-            // Get the anonymousId for this check-in
-            const targetCheckIn = checkIns.find(c => c.id === targetCheckoutId);
-            
-            const response = await fetch(`/api/checkin/${targetCheckoutId}/checkout`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    anonymousId: targetCheckIn?.anonymousId,
-                }),
-            });
-
-            if (response.ok) {
-                // Force immediate refresh with cache bypass
-                await fetchCheckIns(true);
-                setCheckoutModalOpen(false);
-                setTargetCheckoutId(null);
-                setCheckInIdInput('');
-                setCheckoutError(null);
-            } else {
-                const data = await response.json();
-                setCheckoutError(data.error || 'Failed to check out. Please try again.');
-            }
-        } catch {
-            setCheckoutError('Network error. Please try again.');
-        }
-    };
-
-    const cancelCheckout = () => {
-        setCheckoutModalOpen(false);
-        setTargetCheckoutId(null);
-        setCheckInIdInput('');
-        setCheckoutError(null);
-    };
 
     if (loading) {
         return (
@@ -195,9 +88,6 @@ export default function CheckInList() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Check-In Time
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Actions
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -219,20 +109,6 @@ export default function CheckInList() {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                             {new Date(checkIn.checkInTime).toLocaleString()}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                                            <button
-                                                onClick={() => handleCheckout(checkIn.id)}
-                                                className="text-blue-600 hover:text-blue-900 font-medium"
-                                            >
-                                                Check Out
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(checkIn.id)}
-                                                className="text-red-600 hover:text-red-900 font-medium"
-                                            >
-                                                Delete
-                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -270,9 +146,6 @@ export default function CheckInList() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Check-Out Time
                                     </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Actions
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -295,14 +168,6 @@ export default function CheckInList() {
                                                 : '-'
                                             }
                                         </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                            <button
-                                                onClick={() => handleDelete(checkIn.id)}
-                                                className="text-red-600 hover:text-red-900 font-medium"
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -310,114 +175,6 @@ export default function CheckInList() {
                     </div>
                 )}
             </div>
-
-            {/* Delete Confirmation Modal */}
-            {deleteModalOpen && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">
-                            Confirm Deletion
-                        </h3>
-                        
-                        <p className="text-sm text-gray-600 mb-4">
-                            To delete this check-in session, please enter the <strong>Check-In ID</strong> that was provided when you checked in.
-                        </p>
-
-                        <div className="mb-4">
-                            <label htmlFor="checkInIdInput" className="block text-sm font-medium text-gray-700 mb-2">
-                                Check-In ID
-                            </label>
-                            <input
-                                id="checkInIdInput"
-                                type="text"
-                                value={checkInIdInput}
-                                onChange={(e) => {
-                                    setCheckInIdInput(e.target.value);
-                                    setDeleteError(null);
-                                }}
-                                placeholder="Enter Check-In ID"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-800 font-mono text-sm"
-                                autoFocus
-                            />
-                        </div>
-
-                        {deleteError && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                                <p className="text-sm text-red-800">{deleteError}</p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={cancelDelete}
-                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmDelete}
-                                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-medium"
-                            >
-                                Delete
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Checkout Confirmation Modal */}
-            {checkoutModalOpen && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">
-                            Confirm Check Out
-                        </h3>
-                        
-                        <p className="text-sm text-gray-600 mb-4">
-                            To check out from this session, please enter the <strong>Check-In ID</strong> that was provided when you checked in.
-                        </p>
-
-                        <div className="mb-4">
-                            <label htmlFor="checkoutIdInput" className="block text-sm font-medium text-gray-700 mb-2">
-                                Check-In ID
-                            </label>
-                            <input
-                                id="checkoutIdInput"
-                                type="text"
-                                value={checkInIdInput}
-                                onChange={(e) => {
-                                    setCheckInIdInput(e.target.value);
-                                    setCheckoutError(null);
-                                }}
-                                placeholder="Enter Check-In ID"
-                                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-800 font-mono text-sm"
-                                autoFocus
-                            />
-                        </div>
-
-                        {checkoutError && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-                                <p className="text-sm text-red-800">{checkoutError}</p>
-                            </div>
-                        )}
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={cancelCheckout}
-                                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={confirmCheckout}
-                                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
-                            >
-                                Check Out
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
